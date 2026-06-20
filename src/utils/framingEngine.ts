@@ -10,6 +10,25 @@ export interface FramingMember {
   wallId?: string;                    // Optional association to specific Wall
 }
 
+export const getWallLayers = (wall: any) => {
+  if (wall.layerThicknesses) {
+    return {
+      outer: wall.layerThicknesses.outer,
+      middle: wall.layerThicknesses.middle,
+      inner: wall.layerThicknesses.inner,
+    };
+  }
+  const T = wall.thickness ?? 0.15;
+  if (Math.abs(T - 0.15) < 0.001) {
+    return { outer: 0.02, middle: 0.10, inner: 0.03 };
+  }
+  return {
+    outer: T * 0.15,
+    middle: T * 0.70,
+    inner: T * 0.15,
+  };
+};
+
 export function generateFraming(state: ProjectState): FramingMember[] {
   const members: FramingMember[] = [];
   const { width, depth, heightPerFloor } = state.dimensions;
@@ -21,9 +40,11 @@ export function generateFraming(state: ProjectState): FramingMember[] {
   if (state.foundation && state.foundation.type === 'screws') {
     const floor = state.floors[0];
     if (floor) {
-      const wallThickness = floor.walls[0]?.thickness || 0.15;
-      const outerW = width + wallThickness * 0.70;
-      const outerD = depth + wallThickness * 0.70;
+      const firstWall = floor.walls[0] || { thickness: 0.15 };
+      const { outer, middle, inner } = getWallLayers(firstWall);
+      const T_total = outer + middle + inner;
+      const outerW = width + T_total - 2 * outer;
+      const outerD = depth + T_total - 2 * outer;
 
       const spacingLimit = 1.5; // Max 1.5m spacing between screws
       const numSpacesX = Math.max(1, Math.ceil(outerW / spacingLimit));
@@ -53,7 +74,6 @@ export function generateFraming(state: ProjectState): FramingMember[] {
   }
 
   const lumberThickness = 0.04; // 40mm
-  const lumberWidth = 0.09;     // 90mm (2x4 standard)
 
   // ----------------------------------------------------
   // 1. FLOOR JOISTS GENERATION (For each floor)
@@ -67,9 +87,11 @@ export function generateFraming(state: ProjectState): FramingMember[] {
     const floor = state.floors.find(f => f.level === level) || state.floors[state.floors.length - 1];
     if (!floor) continue;
 
-    const wallThickness = floor.walls[0]?.thickness || 0.15;
-    const outerW = width + wallThickness * 0.70;
-    const outerD = depth + wallThickness * 0.70;
+    const firstWall = floor.walls[0] || { thickness: 0.15 };
+    const { outer, middle, inner } = getWallLayers(firstWall);
+    const T_total = outer + middle + inner;
+    const outerW = width + T_total - 2 * outer;
+    const outerD = depth + T_total - 2 * outer;
 
     // Front and Back Rim Joists
     members.push({
@@ -186,6 +208,9 @@ export function generateFraming(state: ProjectState): FramingMember[] {
       const length = Math.sqrt(dx * dx + dz * dz);
       const rotationY = -Math.atan2(dz, dx);
 
+      const { outer, middle, inner } = getWallLayers(wall);
+      const wallLz = (inner - outer) / 2;
+
       // Determine heights
       const joistHeight = 0.14;
       const baseHeight = isTopFloor ? heightPerFloor : heightPerFloor - joistHeight;
@@ -263,9 +288,11 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         members.push({
           id: `wall-bottom-plate-${floor.id}-${wall.id}-${idx}`,
           type: 'plate',
-          position: toWorld((seg.start + seg.end) / 2, lumberThickness / 2, 0),
+          position: toWorld((seg.start + seg.end) / 2, lumberThickness / 2, wallLz),
           rotation: [0, rotationY, 0],
-          size: [segLen, lumberThickness, wall.thickness - 0.02],
+          size: [segLen, lumberThickness, middle],
+          floorId: floor.id,
+          wallId: wall.id,
         });
       });
 
@@ -279,16 +306,20 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         members.push({
           id: `wall-top-plate-1-${floor.id}-${wall.id}-${x1.toFixed(2)}`,
           type: 'plate',
-          position: toWorld((x1 + x2) / 2, avgY - lumberThickness / 2, 0),
+          position: toWorld((x1 + x2) / 2, avgY - lumberThickness / 2, wallLz),
           rotation: [0, rotationY, slopeAngle],
-          size: [segLen, lumberThickness, wall.thickness - 0.02],
+          size: [segLen, lumberThickness, middle],
+          floorId: floor.id,
+          wallId: wall.id,
         });
         members.push({
           id: `wall-top-plate-2-${floor.id}-${wall.id}-${x1.toFixed(2)}`,
           type: 'plate',
-          position: toWorld((x1 + x2) / 2, avgY - lumberThickness * 1.5, 0),
+          position: toWorld((x1 + x2) / 2, avgY - lumberThickness * 1.5, wallLz),
           rotation: [0, rotationY, slopeAngle],
-          size: [segLen, lumberThickness, wall.thickness - 0.02],
+          size: [segLen, lumberThickness, middle],
+          floorId: floor.id,
+          wallId: wall.id,
         });
       };
 
@@ -352,9 +383,11 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         members.push({
           id,
           type: 'stud',
-          position: toWorld(localX, studY, 0),
+          position: toWorld(localX, studY, wallLz),
           rotation: [0, rotationY, 0],
-          size: [lumberThickness, studHeight, lumberWidth],
+          size: [lumberThickness, studHeight, middle],
+          floorId: floor.id,
+          wallId: wall.id,
         });
       };
 
@@ -429,9 +462,11 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         members.push({
           id: `wall-stud-jack-left-${floor.id}-${wall.id}-${obj.id}`,
           type: 'stud',
-          position: toWorld(jackLeftX, lumberThickness + jackLeftHeight / 2, 0),
+          position: toWorld(jackLeftX, lumberThickness + jackLeftHeight / 2, wallLz),
           rotation: [0, rotationY, 0],
-          size: [lumberThickness, jackLeftHeight, lumberWidth],
+          size: [lumberThickness, jackLeftHeight, middle],
+          floorId: floor.id,
+          wallId: wall.id,
         });
 
         // Right Jack stud
@@ -439,9 +474,11 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         members.push({
           id: `wall-stud-jack-right-${floor.id}-${wall.id}-${obj.id}`,
           type: 'stud',
-          position: toWorld(jackRightX, lumberThickness + jackRightHeight / 2, 0),
+          position: toWorld(jackRightX, lumberThickness + jackRightHeight / 2, wallLz),
           rotation: [0, rotationY, 0],
-          size: [lumberThickness, jackRightHeight, lumberWidth],
+          size: [lumberThickness, jackRightHeight, middle],
+          floorId: floor.id,
+          wallId: wall.id,
         });
 
         // 3. Header (horizontal load-bearing beam, double width)
@@ -449,9 +486,11 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         members.push({
           id: `wall-header-${floor.id}-${wall.id}-${obj.id}`,
           type: 'header',
-          position: toWorld(obj.position, yEnd + headerThickness / 2, 0),
+          position: toWorld(obj.position, yEnd + headerThickness / 2, wallLz),
           rotation: [0, rotationY, 0],
-          size: [headerWidth, headerThickness, wall.thickness - 0.01],
+          size: [headerWidth, headerThickness, middle],
+          floorId: floor.id,
+          wallId: wall.id,
         });
 
         // 4. Window Sill (if not a door and is elevated)
@@ -459,9 +498,11 @@ export function generateFraming(state: ProjectState): FramingMember[] {
           members.push({
             id: `wall-sill-${floor.id}-${wall.id}-${obj.id}`,
             type: 'sill',
-            position: toWorld(obj.position, yStart - lumberThickness / 2, 0),
+            position: toWorld(obj.position, yStart - lumberThickness / 2, wallLz),
             rotation: [0, rotationY, 0],
-            size: [obj.width, lumberThickness, lumberWidth],
+            size: [obj.width, lumberThickness, middle],
+            floorId: floor.id,
+            wallId: wall.id,
           });
 
           // Cripple studs underneath the sill (spaced every 0.4m)
@@ -474,9 +515,11 @@ export function generateFraming(state: ProjectState): FramingMember[] {
               members.push({
                 id: `wall-cripple-under-${i}-${floor.id}-${wall.id}-${obj.id}`,
                 type: 'stud',
-                position: toWorld(cx, lumberThickness + crippleHeight / 2, 0),
+                position: toWorld(cx, lumberThickness + crippleHeight / 2, wallLz),
                 rotation: [0, rotationY, 0],
-                size: [lumberThickness, crippleHeight, lumberWidth],
+                size: [lumberThickness, crippleHeight, middle],
+                floorId: floor.id,
+                wallId: wall.id,
               });
             }
           }
@@ -495,9 +538,11 @@ export function generateFraming(state: ProjectState): FramingMember[] {
             members.push({
               id: `wall-cripple-above-${i}-${floor.id}-${wall.id}-${obj.id}`,
               type: 'stud',
-              position: toWorld(cx, headerTopY + crippleAboveHeight / 2, 0),
+              position: toWorld(cx, headerTopY + crippleAboveHeight / 2, wallLz),
               rotation: [0, rotationY, 0],
-              size: [lumberThickness, crippleAboveHeight, lumberWidth],
+              size: [lumberThickness, crippleAboveHeight, middle],
+              floorId: floor.id,
+              wallId: wall.id,
             });
           }
         }

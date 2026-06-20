@@ -1,7 +1,7 @@
 import { useState, ChangeEvent } from 'react';
 import { useProjectStore } from '../store';
 import { BuildingType } from '../types';
-import { generateFraming, FramingMember } from '../utils/framingEngine';
+import { generateFraming, FramingMember, getWallLayers } from '../utils/framingEngine';
 
 export default function Sidebar() {
   const [activeTab, setActiveTab] = useState<'design' | 'bom'>('design');
@@ -20,6 +20,7 @@ export default function Sidebar() {
     setDimensions,
     setRoofConfig,
     setFoundationConfig,
+    setWallLayerThicknesses,
     updateUIState,
     addFloor,
     removeLastFloor,
@@ -511,67 +512,157 @@ export default function Sidebar() {
                     Deselect
                   </button>
                 </div>
+                {selectedType === 'wall' && selectedWall && (() => {
+                  const { outer, middle, inner } = getWallLayers(selectedWall);
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <p style={{ margin: 0, fontSize: '12px', color: '#aaa' }}>
+                        Wall coordinates: [{selectedWall.start.map((coord: number) => coord.toFixed(2)).join(', ')}] to [{selectedWall.end.map((coord: number) => coord.toFixed(2)).join(', ')}]
+                      </p>
+                      
+                      {/* Configurable layers inputs */}
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        backgroundColor: '#1a1a1a',
+                        padding: '10px',
+                        borderRadius: '6px',
+                        border: '1px solid #333',
+                        marginTop: '4px'
+                      }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#ff8c00', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          Wall Layers Thicknesses (m)
+                        </div>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', alignItems: 'center' }}>
+                          <label style={{ fontSize: '11px', color: '#ccc' }}>Outer Siding:</label>
+                          <input
+                            type="number"
+                            step="0.005"
+                            min="0.005"
+                            max="0.10"
+                            value={outer}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0.02;
+                              setWallLayerThicknesses(selectedId, val, middle, inner);
+                            }}
+                            style={{
+                              padding: '4px 8px',
+                              backgroundColor: '#111',
+                              border: '1px solid #444',
+                              borderRadius: '4px',
+                              color: '#fff',
+                              fontSize: '11px',
+                              outline: 'none',
+                            }}
+                          />
 
-                {selectedType === 'wall' && selectedWall && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <p style={{ margin: 0, fontSize: '12px', color: '#aaa' }}>
-                      Wall coordinates: [{selectedWall.start.join(', ')}] to [{selectedWall.end.join(', ')}]
-                    </p>
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
-                      <button
-                        onClick={() => addSubObject(selectedId, 'door')}
-                        style={{
-                          flex: '1 1 0px',
-                          padding: '6px',
-                          backgroundColor: '#ff8c00',
-                          color: '#000',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          minWidth: '75px'
-                        }}
-                      >
-                        + Door
-                      </button>
-                      <button
-                        onClick={() => addSubObject(selectedId, 'window')}
-                        style={{
-                          flex: '1 1 0px',
-                          padding: '6px',
-                          backgroundColor: '#ff8c00',
-                          color: '#000',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          minWidth: '75px'
-                        }}
-                      >
-                        + Window
-                      </button>
-                      <button
-                        onClick={() => addSubObject(selectedId, 'opening')}
-                        style={{
-                          flex: '1 1 0px',
-                          padding: '6px',
-                          backgroundColor: '#ff8c00',
-                          color: '#000',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          minWidth: '75px'
-                        }}
-                      >
-                        + Opening
-                      </button>
+                          <label style={{ fontSize: '11px', color: '#ccc' }}>Stud Core (Middle):</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.04"
+                            max="0.30"
+                            value={middle}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0.10;
+                              setWallLayerThicknesses(selectedId, outer, val, inner);
+                            }}
+                            style={{
+                              padding: '4px 8px',
+                              backgroundColor: '#111',
+                              border: '1px solid #444',
+                              borderRadius: '4px',
+                              color: '#fff',
+                              fontSize: '11px',
+                              outline: 'none',
+                            }}
+                          />
+
+                          <label style={{ fontSize: '11px', color: '#ccc' }}>Inner Drywall:</label>
+                          <input
+                            type="number"
+                            step="0.005"
+                            min="0.005"
+                            max="0.10"
+                            value={inner}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0.03;
+                              setWallLayerThicknesses(selectedId, outer, middle, val);
+                            }}
+                            style={{
+                              padding: '4px 8px',
+                              backgroundColor: '#111',
+                              border: '1px solid #444',
+                              borderRadius: '4px',
+                              color: '#fff',
+                              fontSize: '11px',
+                              outline: 'none',
+                            }}
+                          />
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#888', borderTop: '1px solid #2a2a2a', paddingTop: '6px', marginTop: '4px' }}>
+                          Total wall thickness: <strong>{selectedWall.thickness.toFixed(3)}m</strong>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                        <button
+                          onClick={() => addSubObject(selectedId, 'door')}
+                          style={{
+                            flex: '1 1 0px',
+                            padding: '6px',
+                            backgroundColor: '#ff8c00',
+                            color: '#000',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            minWidth: '75px'
+                          }}
+                        >
+                          + Door
+                        </button>
+                        <button
+                          onClick={() => addSubObject(selectedId, 'window')}
+                          style={{
+                            flex: '1 1 0px',
+                            padding: '6px',
+                            backgroundColor: '#ff8c00',
+                            color: '#000',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            minWidth: '75px'
+                          }}
+                        >
+                          + Window
+                        </button>
+                        <button
+                          onClick={() => addSubObject(selectedId, 'opening')}
+                          style={{
+                            flex: '1 1 0px',
+                            padding: '6px',
+                            backgroundColor: '#ff8c00',
+                            color: '#000',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            minWidth: '75px'
+                          }}
+                        >
+                          + Opening
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {selectedType === 'subObject' && selectedSubObj && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>

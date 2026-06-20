@@ -22,6 +22,11 @@ export interface Wall {
   end: [number, number];   // 2D [x, z] relative to floor center
   thickness: number;       // total wall thickness (default 0.15m)
   subObjects: SubObject[];
+  layerThicknesses?: {
+    outer: number;
+    middle: number;
+    inner: number;
+  };
 }
 
 export interface Floor {

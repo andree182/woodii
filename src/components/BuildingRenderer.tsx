@@ -1,7 +1,7 @@
 import { DoubleSide, FrontSide, Side, Shape, Path, Plane, Vector3 } from 'three';
 import { useProjectStore } from '../store';
 import { Wall, Floor } from '../types';
-import { generateFraming } from '../utils/framingEngine';
+import { generateFraming, getWallLayers } from '../utils/framingEngine';
 
 export default function BuildingRenderer() {
   const dimensions = useProjectStore((state) => state.dimensions);
@@ -231,7 +231,8 @@ export default function BuildingRenderer() {
       <group key={wallId} position={[startX, level * heightPerFloor, startZ]} rotation={[0, rotationY, 0]}>
         {/* Wall body with cutouts - 3 Layers (Outer, Middle/Insulation, Inner) */}
         {uiState.seeThroughMode !== 'studsOnly' && (() => {
-          const T = wall.thickness;
+          const { outer, middle, inner } = getWallLayers(wall);
+          const T = outer + middle + inner;
           const isSelected = uiState.selectedId === wallId;
           const mode = uiState.seeThroughMode;
 
@@ -241,30 +242,30 @@ export default function BuildingRenderer() {
           const layers = [
             {
               suffix: 'outer',
-              zOffset: T / 2 - T * 0.15,
-              depth: T * 0.15,
+              zOffset: T / 2 - outer,
+              depth: outer,
               color: '#8b5a2b', // Wood siding brown
               opacity: mode === 'seeThrough' ? 0.15 : 1.0,
-              xStartOffset: isSideWall ? -T : T * 0.15,
-              xEndOffset: isSideWall ? -T : T * 0.15,
+              xStartOffset: isSideWall ? -T : outer,
+              xEndOffset: isSideWall ? -T : outer,
             },
             {
               suffix: 'middle',
-              zOffset: -T / 2 + T * 0.15,
-              depth: T * 0.70,
+              zOffset: -T / 2 + inner,
+              depth: middle,
               color: '#ded29e', // Rockwool insulation yellow
               opacity: mode === 'seeThrough' ? 0.25 : 1.0,
-              xStartOffset: isSideWall ? -T * 0.15 : T * 0.15,
-              xEndOffset: isSideWall ? -T * 0.15 : T * 0.15,
+              xStartOffset: isSideWall ? -inner : outer,
+              xEndOffset: isSideWall ? -inner : outer,
             },
             {
               suffix: 'inner',
               zOffset: -T / 2,
-              depth: T * 0.15,
+              depth: inner,
               color: '#e6e6e6', // Drywall off-white
               opacity: mode === 'seeThrough' ? 0.5 : 1.0,
-              xStartOffset: isSideWall ? -T * 0.15 : T * 0.85,
-              xEndOffset: isSideWall ? -T * 0.15 : T * 0.85,
+              xStartOffset: isSideWall ? -inner : inner + middle,
+              xEndOffset: isSideWall ? -inner : inner + middle,
             }
           ];
 

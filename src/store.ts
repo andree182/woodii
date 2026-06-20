@@ -59,6 +59,52 @@ export const createOuterWalls = (width: number, depth: number, thickness = 0.15,
   ];
 };
 
+export const recalculateWallCoordinates = (
+  width: number,
+  depth: number,
+  walls: Wall[]
+): Wall[] => {
+  const halfW = width / 2;
+  const halfD = depth / 2;
+  
+  const getT = (id: string) => walls.find(w => w.id === id)?.thickness ?? 0.15;
+  const T_front = getT('wall-front');
+  const T_back = getT('wall-back');
+  const T_left = getT('wall-left');
+  const T_right = getT('wall-right');
+
+  return walls.map((wall) => {
+    let start: [number, number] = [0, 0];
+    let end: [number, number] = [0, 0];
+    
+    switch (wall.id) {
+      case 'wall-front':
+        start = [-halfW - T_left * 0.5, halfD];
+        end = [halfW + T_right * 0.5, halfD];
+        break;
+      case 'wall-right':
+        start = [halfW, halfD - T_front * 0.5];
+        end = [halfW, -halfD + T_back * 0.5];
+        break;
+      case 'wall-back':
+        start = [halfW + T_right * 0.5, -halfD];
+        end = [-halfW - T_left * 0.5, -halfD];
+        break;
+      case 'wall-left':
+        start = [-halfW, -halfD + T_back * 0.5];
+        end = [-halfW, halfD - T_front * 0.5];
+        break;
+    }
+    
+    return {
+      ...wall,
+      start,
+      end,
+    };
+  });
+};
+
+
 interface ProjectStore extends ProjectState {
   // Actions
   setBuildingType: (type: BuildingType) => void;
@@ -75,6 +121,7 @@ interface ProjectStore extends ProjectState {
   addSubObject: (wallId: string, type: 'window' | 'door' | 'opening') => void;
   removeSubObject: (wallId: string, subObjectId: string) => void;
   setFloorOpening: (floorId: string, opening: Floor['floorOpening'] | null) => void;
+  setWallLayerThicknesses: (wallKey: string, outer: number, middle: number, inner: number) => void;
   loadProject: (project: any) => void;
   resetProject: () => void;
 
@@ -139,10 +186,11 @@ export const useProjectStore = create<ProjectStore>((set) => ({
     // Dynamically adjust outer walls for each floor to match new dimensions
     const newFloors = state.floors.map((floor) => {
       const existingWalls = floor.walls;
-      const defaultWalls = createOuterWalls(newDims.width, newDims.depth, 0.15, floor.level);
+      // Recalculate coordinates based on existing wall thicknesses and new dimensions
+      const relocatedWalls = recalculateWallCoordinates(newDims.width, newDims.depth, existingWalls);
       
       // Preserve subObjects where possible by matching wall direction (front, right, back, left)
-      const updatedWalls = defaultWalls.map((newWall) => {
+      const updatedWalls = relocatedWalls.map((newWall) => {
         const matchingExisting = existingWalls.find(w => w.id === newWall.id);
         if (matchingExisting) {
           // Keep the existing subObjects but adjust positions if they exceed the new length
@@ -946,6 +994,67 @@ export const useProjectStore = create<ProjectStore>((set) => ({
         };
       })
     };
+  }),
+
+  setWallLayerThicknesses: (wallKey, outer, middle, inner) => set((state) => {
+    const parts = wallKey.split('-');
+    const floorId = `${parts[0]}-${parts[1]}`;
+    const wallId = parts.slice(2).join('-');
+
+    const updatedFloors = state.floors.map((floor) => {
+      if (floor.id !== floorId) return floor;
+
+      // Update the target wall first
+      const updatedWalls = floor.walls.map((wall) => {
+        if (wall.id !== wallId) return wall;
+        return {
+          ...wall,
+          thickness: outer + middle + inner,
+          layerThicknesses: { outer, middle, inner },
+        };
+      });
+
+      // Recalculate coordinates for all walls on this floor
+      const relocatedWalls = recalculateWallCoordinates(
+        state.dimensions.width,
+        state.dimensions.depth,
+        updatedWalls
+      );
+
+      // Clamp subobjects for each wall
+      const finalWalls = relocatedWalls.map((w) => {
+        const wallLength = Math.sqrt(
+          Math.pow(w.end[0] - w.start[0], 2) +
+          Math.pow(w.end[1] - w.start[1], 2)
+        );
+        const adjustedSubObjects = w.subObjects.map((obj) => {
+          const maxWidth = Math.max(0.1, wallLength - 2 * w.thickness);
+          const clampedWidth = Math.min(maxWidth, obj.width);
+          const halfW = clampedWidth / 2;
+          const minPos = halfW + w.thickness;
+          const maxPos = wallLength - halfW - w.thickness;
+          const clampedPos = maxPos >= minPos
+            ? Math.max(minPos, Math.min(maxPos, obj.position))
+            : wallLength / 2;
+          return {
+            ...obj,
+            width: clampedWidth,
+            position: clampedPos,
+          };
+        });
+        return {
+          ...w,
+          subObjects: adjustedSubObjects,
+        };
+      });
+
+      return {
+        ...floor,
+        walls: finalWalls,
+      };
+    });
+
+    return { floors: updatedFloors };
   }),
 
   loadProject: (project) => set((state) => {
