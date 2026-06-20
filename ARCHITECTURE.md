@@ -85,20 +85,22 @@ interface RoofConfig {
 
 ## 5. Implementation Phases
 
-**Phase 1 to 6: Core Setup, Rendering, Dragging, Sub-objects, Multi-floor, and Framing (Completed)**
+**Phases 1 to 9: Foundation, Framing, Wall Height, and Global Siding Configurations (Completed)**
 
-**Phase 7: Wall-by-Wall Framing Plans & Component Lists (Active/High Priority)**
-- Update the Construction Engine to track host floor and wall associations for each member.
-- Re-architect the BOM UI sidebar tab to offer wall-by-wall schedules, lists, and positioning maps.
+**Phase 10: Siding Composition Presets**
+- Define `wallPreset: 'custom' | 'diffusion_open' | 'diffusion_closed'` in state.
+- Automatically configure global `wallLayers` thicknesses based on the active preset.
+- Adapt the 3D wall mesh layers to skip rendering the inner layer if thickness is `0` (for cheap/diffusion-closed houses).
 
-**Phase 8: Ground Screw Foundation**
-- Introduce a foundation selector in the UI.
-- Implement an algorithm to generate optimal ground screw grid placement and render steel ground screws extending downward in 3D.
-- Add ground screws to the BOM lists.
+**Phase 11: Staggered Structural Blocking (Noggings & Bridging)**
+- Implement horizontal staggered noggings centered between studs in wall framing.
+- Implement staggered horizontal blocking between floor joists along the centerline of the joist spans.
+- Alternate block elevations/offsets in adjacent bays for realistic face-nailing representation.
 
-**Phase 9: Configurable Siding Layer Thickness**
-- Allow users to configure outer, middle, and inner layer thicknesses.
-- Propagate custom thicknesses to 3D mesh render layers and framing stud width calculations.
+**Phase 12: Internal Partition Walls Editor**
+- Add `internalWalls` array to the `Floor` type, supporting custom start/end points, `timberSize` (width/thickness), double-sided cladding (`liningThickness`), and door openings.
+- Render internal wall frames and cladding layers using butt-joints against outer wall inner faces, supporting standard solid/see-through display modes.
+- Implement Sidebar interface to add, remove, and configure internal wall partitions.
 
 
 ## 6. Development Workflow Rules

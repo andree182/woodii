@@ -22,7 +22,7 @@ We are designing together a web F/three.js/jsx (using vite to build) application
   * Floor construction/width
 
 * Configurable outer wall properties:
-  * layers (outer shell, middle layer with insulation and stands, inner layer). Support configurable thickness for individual layers (outer siding, middle stud core, inner drywall).
+  * Preset siding compositions: Diffusion-Open (siding + studs + OSB inner lining), Diffusion-Closed (siding + OSB + studs, no inner lining), and Custom (manual layer thickness inputs).
   * elements: windows, doors, and empty openings (for custom elements)
 
 * New/Load/Save/Demo project features should be available
@@ -43,7 +43,8 @@ We are designing together a web F/three.js/jsx (using vite to build) application
   * Dynamic width calculation of saddle roof collar ties based on their elevation to sit flush inside the sloped rafters and avoid outer protrusion.
   * Configurable ceiling/attic floor slab (roof of the top floor) rendered below the roof with custom openings (for attic access, chimneys, etc.).
   * Configurable foundation options: Concrete Slab vs Ground Screws (automatically calculate and render ground screw layout grids and list them in the BOM).
+  * Staggered horizontal noggings/blocking in walls and floor joist bays to increase structural stability.
+  * Internal Partition Walls Editor: Allow partitioning each floor using non-structural walls with custom timber dimensions (e.g., 2x3 framing), double-sided drywall/OSB lining, and door openings, with butt-joint connections.
 
 * Out of Scope:
   * Small internal or external components (such as wheels, porches, verandas, or nest boxes). Focus is strictly on full floor/wall structural framing, foundations, and siding layers.
-
