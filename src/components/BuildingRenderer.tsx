@@ -74,11 +74,6 @@ export default function BuildingRenderer() {
     const length = Math.sqrt(dx * dx + dz * dz);
     const rotationY = -Math.atan2(dz, dx);
 
-    // Wall center coordinates
-    const wallCenterX = (startX + endX) / 2;
-    const wallCenterZ = (startZ + endZ) / 2;
-    const wallCenterY = level * heightPerFloor + heightPerFloor / 2;
-
     const wallId = `${floorId}-${wall.id}`;
     const matProps = getMaterialProps(wallId, 'wall', '#b0a090');
 
@@ -86,25 +81,84 @@ export default function BuildingRenderer() {
     const ux = dx / length;
     const uz = dz / length;
 
+    // Check if we need to apply flat roof slope adjustment to this wall
+    const isTopFloor = level === totalFloors - 1;
+    const isFlatRoof = roof.type === 'flat';
+    const angleRad = (roof.inclination * Math.PI) / 180;
+    
+    // Sloped wall specific calculations
+    let useSlopeGeometry = false;
+    let slopedWallShape: Shape | null = null;
+    let customHeight = heightPerFloor;
+    let customCenterY = level * heightPerFloor + heightPerFloor / 2;
+
+    if (isTopFloor && isFlatRoof) {
+      if (wall.id === 'wall-left') {
+        customHeight = heightPerFloor + (width / 2) * Math.tan(angleRad);
+        customCenterY = level * heightPerFloor + customHeight / 2;
+      } else if (wall.id === 'wall-right') {
+        customHeight = heightPerFloor - (width / 2) * Math.tan(angleRad);
+        customCenterY = level * heightPerFloor + customHeight / 2;
+      } else if (wall.id === 'wall-front' || wall.id === 'wall-back') {
+        useSlopeGeometry = true;
+        const halfWallW = length / 2;
+        const hLeft = heightPerFloor + (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
+        const hRight = heightPerFloor - (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
+
+        // Wall Back is mirror-inverted because its coordinates run in the opposite direction (from right to left)
+        const isBack = wall.id === 'wall-back';
+        const hStart = isBack ? hRight : hLeft;
+        const hEnd = isBack ? hLeft : hRight;
+
+        slopedWallShape = new Shape();
+        slopedWallShape.moveTo(-halfWallW, 0);
+        slopedWallShape.lineTo(halfWallW, 0);
+        slopedWallShape.lineTo(halfWallW, hEnd);
+        slopedWallShape.lineTo(-halfWallW, hStart);
+        slopedWallShape.closePath();
+      }
+    }
+
+    // Wall center coordinates
+    const wallCenterX = (startX + endX) / 2;
+    const wallCenterZ = (startZ + endZ) / 2;
+
     return (
       <group key={wallId}>
         {/* Wall body */}
-        <group
-          position={[wallCenterX, wallCenterY, wallCenterZ]}
-          rotation={[0, rotationY, 0]}
-        >
-          <mesh
-            castShadow
-            receiveShadow
-            onClick={(e) => {
-              e.stopPropagation();
-              selectObject(wallId, 'wall');
-            }}
+        {useSlopeGeometry && slopedWallShape ? (
+          <group position={[wallCenterX, 0, wallCenterZ]} rotation={[0, rotationY, 0]}>
+            <mesh
+              position={[0, level * heightPerFloor, -wall.thickness / 2]}
+              castShadow
+              receiveShadow
+              onClick={(e) => {
+                e.stopPropagation();
+                selectObject(wallId, 'wall');
+              }}
+            >
+              <extrudeGeometry args={[slopedWallShape, { depth: wall.thickness, bevelEnabled: false }]} />
+              <meshStandardMaterial {...matProps} roughness={0.7} />
+            </mesh>
+          </group>
+        ) : (
+          <group
+            position={[wallCenterX, customCenterY, wallCenterZ]}
+            rotation={[0, rotationY, 0]}
           >
-            <boxGeometry args={[length, heightPerFloor, wall.thickness]} />
-            <meshStandardMaterial {...matProps} roughness={0.7} />
-          </mesh>
-        </group>
+            <mesh
+              castShadow
+              receiveShadow
+              onClick={(e) => {
+                e.stopPropagation();
+                selectObject(wallId, 'wall');
+              }}
+            >
+              <boxGeometry args={[length, customHeight, wall.thickness]} />
+              <meshStandardMaterial {...matProps} roughness={0.7} />
+            </mesh>
+          </group>
+        )}
 
         {/* Sub-objects (windows and doors) */}
         {wall.subObjects.map((obj) => {
@@ -112,9 +166,20 @@ export default function BuildingRenderer() {
           const objX = startX + ux * obj.position;
           const objZ = startZ + uz * obj.position;
           
-          // Y positioning: doors touch the floor, windows are elevated
+          // Y positioning: doors touch the floor, windows are centered or elevated
           const isDoor = obj.type === 'door';
-          const objY = level * heightPerFloor + (isDoor ? obj.height / 2 : heightPerFloor / 2);
+          let localWallHeight = customHeight;
+
+          if (isTopFloor && isFlatRoof && (wall.id === 'wall-front' || wall.id === 'wall-back')) {
+            const isBack = wall.id === 'wall-back';
+            const hLeft = heightPerFloor + (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
+            const hRight = heightPerFloor - (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
+            localWallHeight = isBack
+              ? hRight + obj.position * Math.tan(angleRad)
+              : hLeft - obj.position * Math.tan(angleRad);
+          }
+
+          const objY = level * heightPerFloor + (isDoor ? obj.height / 2 : localWallHeight / 2);
           
           const objId = obj.id;
           const objMatProps = getMaterialProps(objId, 'subObject', obj.color || '#a0d0f0');
@@ -149,13 +214,17 @@ export default function BuildingRenderer() {
   const renderRoof = () => {
     const matProps = getMaterialProps('roof', 'roof', '#a05040');
     const { overhang, inclination, thickness, type } = roof;
+    const angleRad = (inclination * Math.PI) / 180;
 
     if (type === 'flat') {
-      const roofWidth = width + overhang * 2;
+      const roofWidth = width / Math.cos(angleRad) + overhang * 2;
       const roofDepth = depth + overhang * 2;
+      const tVertical = thickness / Math.cos(angleRad);
+      
       return (
         <mesh
-          position={[0, topElevation + thickness / 2, 0]}
+          position={[0, topElevation + tVertical * 0.5, 0]}
+          rotation={[0, 0, -angleRad]}
           castShadow
           receiveShadow
           onClick={(e) => {
@@ -169,22 +238,33 @@ export default function BuildingRenderer() {
       );
     } else {
       // Saddle Roof: Ridge runs along Z-axis, slopes down on +/- X sides
-      const angleRad = (inclination * Math.PI) / 180;
       const halfRoofWidth = width / 2 + overhang;
-      const slopeLength = halfRoofWidth / Math.cos(angleRad);
-      const ridgeHeight = halfRoofWidth * Math.tan(angleRad);
+      const tVertical = thickness / Math.cos(angleRad);
       
       const roofDepth = depth + overhang * 2;
 
-      // Position calculations for left and right panels
-      const offsetX = halfRoofWidth / 2;
-      const offsetY = topElevation + ridgeHeight / 2;
+      // Create mitered shapes in X-Y plane where bottom face rests exactly on top-plate (Y = topElevation) at X = +/- W/2
+      const rightSlopeShape = new Shape();
+      rightSlopeShape.moveTo(0, topElevation + (width / 2) * Math.tan(angleRad) + tVertical);
+      rightSlopeShape.lineTo(0, topElevation + (width / 2) * Math.tan(angleRad));
+      rightSlopeShape.lineTo(halfRoofWidth, topElevation - overhang * Math.tan(angleRad));
+      rightSlopeShape.lineTo(halfRoofWidth, topElevation - overhang * Math.tan(angleRad) + tVertical);
+      rightSlopeShape.closePath();
 
-      // Create a flat triangular shape for the gable wall
+      const leftSlopeShape = new Shape();
+      leftSlopeShape.moveTo(0, topElevation + (width / 2) * Math.tan(angleRad) + tVertical);
+      leftSlopeShape.lineTo(0, topElevation + (width / 2) * Math.tan(angleRad));
+      leftSlopeShape.lineTo(-halfRoofWidth, topElevation - overhang * Math.tan(angleRad));
+      leftSlopeShape.lineTo(-halfRoofWidth, topElevation - overhang * Math.tan(angleRad) + tVertical);
+      leftSlopeShape.closePath();
+
+      // Create a flat triangular shape for the gable wall (spans exactly wall width + thickness)
+      const wallThickness = floors[0]?.walls[0]?.thickness || 0.15;
+      const halfGableWidth = width / 2 + wallThickness * 0.5;
       const gableShape = new Shape();
-      gableShape.moveTo(-halfRoofWidth, 0);
-      gableShape.lineTo(0, ridgeHeight);
-      gableShape.lineTo(halfRoofWidth, 0);
+      gableShape.moveTo(-halfGableWidth, 0);
+      gableShape.lineTo(0, halfGableWidth * Math.tan(angleRad));
+      gableShape.lineTo(halfGableWidth, 0);
       gableShape.closePath();
 
       return (
@@ -194,27 +274,17 @@ export default function BuildingRenderer() {
             selectObject('roof', 'roof');
           }}
         >
-          {/* Right Slope */}
-          <group
-            position={[offsetX, offsetY, 0]}
-            rotation={[0, 0, -angleRad]}
-          >
-            <mesh castShadow receiveShadow>
-              <boxGeometry args={[slopeLength, thickness, roofDepth]} />
-              <meshStandardMaterial {...matProps} roughness={0.5} />
-            </mesh>
-          </group>
+          {/* Right Slope (Extruded from X-Y shape along Z) */}
+          <mesh castShadow receiveShadow position={[0, 0, -roofDepth / 2]}>
+            <extrudeGeometry args={[rightSlopeShape, { depth: roofDepth, bevelEnabled: false }]} />
+            <meshStandardMaterial {...matProps} roughness={0.5} />
+          </mesh>
 
-          {/* Left Slope */}
-          <group
-            position={[-offsetX, offsetY, 0]}
-            rotation={[0, 0, angleRad]}
-          >
-            <mesh castShadow receiveShadow>
-              <boxGeometry args={[slopeLength, thickness, roofDepth]} />
-              <meshStandardMaterial {...matProps} roughness={0.5} />
-            </mesh>
-          </group>
+          {/* Left Slope (Extruded from X-Y shape along Z) */}
+          <mesh castShadow receiveShadow position={[0, 0, -roofDepth / 2]}>
+            <extrudeGeometry args={[leftSlopeShape, { depth: roofDepth, bevelEnabled: false }]} />
+            <meshStandardMaterial {...matProps} roughness={0.5} />
+          </mesh>
 
           {/* Gable walls (flat triangular front and back closures) */}
           {!matProps.wireframe && (

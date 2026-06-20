@@ -156,26 +156,24 @@ export default function Sidebar() {
         <section>
           <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>Roof Config</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {roof.type === 'saddle' && (
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Inclination (°)</label>
-                <input
-                  type="number"
-                  min="5"
-                  max="60"
-                  value={roof.inclination}
-                  onChange={(e) => handleRoofChange('inclination', parseInt(e.target.value))}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    backgroundColor: '#1a1a1a',
-                    border: '1px solid #444',
-                    borderRadius: '6px',
-                    color: '#e0e0e0'
-                  }}
-                />
-              </div>
-            )}
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Inclination (°)</label>
+              <input
+                type="number"
+                min="5"
+                max="60"
+                value={roof.inclination}
+                onChange={(e) => handleRoofChange('inclination', parseInt(e.target.value))}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  backgroundColor: '#1a1a1a',
+                  border: '1px solid #444',
+                  borderRadius: '6px',
+                  color: '#e0e0e0'
+                }}
+              />
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Overhang (m)</label>

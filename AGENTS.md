@@ -58,3 +58,9 @@ If you genuinely think a convention is harmful, surface it. Don't fork silently.
 "Completed" is wrong if anything was skipped silently.
 "Tests pass" is wrong if any were skipped.
 Default to surfacing uncertainty, not hiding it.
+
+## Rule 13 — Perfect Wood Construction
+- All construction items (studs, plates, joists, rafters) must align and connect perfectly without gaps or overlapping geometry.
+- Wall corner joins must use the "Californian corner" (3-stud corner that leaves the corner open for insulation and backing) framing layout.
+- The 3D representations of walls and roofs must meet flush at the corners and roof lines without intersecting volumes.
+

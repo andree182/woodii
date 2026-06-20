@@ -8,14 +8,15 @@ export const createOuterWalls = (width: number, depth: number, thickness = 0.15,
   return [
     {
       id: 'wall-front',
-      start: [-halfW, halfD],
-      end: [halfW, halfD],
+      // Extended by half-thickness at both ends to cover the side wall ends completely
+      start: [-halfW - thickness * 0.5, halfD],
+      end: [halfW + thickness * 0.5, halfD],
       thickness,
       subObjects: [
         {
           id: `door-main-${level}`,
           type: 'door',
-          position: width / 2 - 0.5, // roughly centered on front wall
+          position: (width + thickness) / 2, // centered on front wall
           width: 0.9,
           height: 2.0,
           color: '#8B4513',
@@ -24,14 +25,15 @@ export const createOuterWalls = (width: number, depth: number, thickness = 0.15,
     },
     {
       id: 'wall-right',
-      start: [halfW, halfD],
-      end: [halfW, -halfD],
+      // Shortened by half-thickness at each end to butt perfectly against front/back wall inner faces
+      start: [halfW, halfD - thickness * 0.5],
+      end: [halfW, -halfD + thickness * 0.5],
       thickness,
       subObjects: [
         {
           id: `window-side-${level}`,
           type: 'window',
-          position: depth / 2, // centered on side wall
+          position: (depth - thickness) / 2, // centered on the shortened side wall
           width: 1.0,
           height: 1.0,
           color: '#ffffff',
@@ -40,15 +42,17 @@ export const createOuterWalls = (width: number, depth: number, thickness = 0.15,
     },
     {
       id: 'wall-back',
-      start: [halfW, -halfD],
-      end: [-halfW, -halfD],
+      // Extended by half-thickness at both ends to cover the side wall ends completely
+      start: [halfW + thickness * 0.5, -halfD],
+      end: [-halfW - thickness * 0.5, -halfD],
       thickness,
       subObjects: [],
     },
     {
       id: 'wall-left',
-      start: [-halfW, -halfD],
-      end: [-halfW, halfD],
+      // Shortened by half-thickness at each end to butt perfectly against front/back wall inner faces
+      start: [-halfW, -halfD + thickness * 0.5],
+      end: [-halfW, halfD - thickness * 0.5],
       thickness,
       subObjects: [],
     },
