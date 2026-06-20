@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ProjectState, BuildingType, Dimensions, RoofConfig, UIState, Floor, Wall } from './types';
+import { ProjectState, BuildingType, Dimensions, RoofConfig, UIState, Floor, Wall, SubObject } from './types';
 
 // Helper to create default walls based on dimensions
 export const createOuterWalls = (width: number, depth: number, thickness = 0.15, level = 0): Wall[] => {

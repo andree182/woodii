@@ -1,4 +1,4 @@
-import { DoubleSide, FrontSide, Shape, Path, Plane, Vector3 } from 'three';
+import { DoubleSide, FrontSide, Side, Shape, Path, Plane, Vector3 } from 'three';
 import { useProjectStore } from '../store';
 import { Wall, Floor } from '../types';
 import { generateFraming } from '../utils/framingEngine';
@@ -26,7 +26,7 @@ export default function BuildingRenderer() {
     let opacity = 1.0;
     let transparent = false;
     let wireframe = false;
-    let side = 0; // FrontSide by default
+    let side: Side = FrontSide; // FrontSide by default
 
     if (mode === 'seeThrough') {
       // 30% transparent means 70% opacity (0.7)
@@ -143,7 +143,7 @@ export default function BuildingRenderer() {
     const rotationY = -Math.atan2(dz, dx);
 
     const wallId = `${floorId}-${wall.id}`;
-    const matProps = getMaterialProps(wallId, 'wall', '#b0a090');
+    const isBack = wall.id === 'wall-back';
 
     // Check if we need to apply flat roof slope adjustment to this wall
     const isTopFloor = level === totalFloors - 1;
@@ -169,7 +169,6 @@ export default function BuildingRenderer() {
       shape.moveTo(xStartOffset, 0);
       shape.lineTo(length - xEndOffset, 0);
 
-      const isBack = wall.id === 'wall-back';
       if (isTopFloor && isFlatRoof && (wall.id === 'wall-front' || wall.id === 'wall-back')) {
         const slopeStartHeight = isBack ? hRight : hLeft;
         const slopeEndHeight = isBack ? hLeft : hRight;
@@ -307,12 +306,12 @@ export default function BuildingRenderer() {
             onPointerDown={(e) => {
               e.stopPropagation();
               startDragging(wallId, 'wallHandle');
-              e.target.setPointerCapture(e.pointerId);
+              (e.target as any).setPointerCapture?.(e.pointerId);
             }}
             onPointerUp={(e) => {
               e.stopPropagation();
               stopDragging();
-              e.target.releasePointerCapture(e.pointerId);
+              (e.target as any).releasePointerCapture?.(e.pointerId);
             }}
             onPointerMove={(e) => {
               if (uiState.isDragging && uiState.draggedId === wallId) {
@@ -386,12 +385,12 @@ export default function BuildingRenderer() {
                   e.stopPropagation();
                   selectObject(objId, 'subObject');
                   startDragging(objId, 'subObject');
-                  e.target.setPointerCapture(e.pointerId);
+                  (e.target as any).setPointerCapture?.(e.pointerId);
                 }}
                 onPointerUp={(e) => {
                   e.stopPropagation();
                   stopDragging();
-                  e.target.releasePointerCapture(e.pointerId);
+                  (e.target as any).releasePointerCapture?.(e.pointerId);
                 }}
                 onPointerMove={(e) => {
                   if (uiState.isDragging && uiState.draggedId === objId) {
@@ -769,8 +768,7 @@ export default function BuildingRenderer() {
                   <mesh
                     key={member.id}
                     position={[member.position[0], member.position[1], member.position[2] - rafterThickness / 2]}
-                    rotation={member.rotation}
-                    rotationOrder="YXZ"
+                    rotation={[member.rotation[0], member.rotation[1], member.rotation[2], 'YXZ']}
                     castShadow
                     receiveShadow
                     onClick={handleClick}
@@ -787,8 +785,7 @@ export default function BuildingRenderer() {
                 <mesh
                   key={member.id}
                   position={member.position}
-                  rotation={member.rotation}
-                  rotationOrder="YXZ"
+                  rotation={[member.rotation[0], member.rotation[1], member.rotation[2], 'YXZ']}
                   castShadow
                   receiveShadow
                   onClick={handleClick}

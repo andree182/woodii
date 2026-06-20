@@ -1,4 +1,4 @@
-import { ProjectState, Floor, Wall, SubObject } from '../types';
+import { ProjectState } from '../types';
 
 export interface FramingMember {
   id: string;
@@ -402,7 +402,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
   // 3. ROOF FRAMING GENERATION
   // ----------------------------------------------------
   const topElevation = totalFloors * heightPerFloor;
-  const { overhang, inclination, thickness, type } = state.roof;
+  const { overhang, inclination, type } = state.roof;
   const angleRad = (inclination * Math.PI) / 180;
 
   const wallThickness = state.floors[0]?.walls[0]?.thickness || 0.15;
