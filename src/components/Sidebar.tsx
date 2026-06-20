@@ -94,7 +94,7 @@ export default function Sidebar() {
     }
   }
 
-  const handleDimensionChange = (key: 'width' | 'depth', val: number) => {
+  const handleDimensionChange = (key: 'width' | 'depth' | 'heightPerFloor', val: number) => {
     if (val > 0) {
       setDimensions({ [key]: val });
     }
@@ -242,7 +242,7 @@ export default function Sidebar() {
           {/* Footprint dimensions */}
           <section>
             <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>Dimensions</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Width (m)</label>
                 <input
@@ -271,6 +271,25 @@ export default function Sidebar() {
                   max="15"
                   value={dimensions.depth}
                   onChange={(e) => handleDimensionChange('depth', parseFloat(e.target.value))}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    backgroundColor: '#1a1a1a',
+                    border: '1px solid #444',
+                    borderRadius: '6px',
+                    color: '#e0e0e0'
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Wall H (m)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="1.5"
+                  max="5"
+                  value={dimensions.heightPerFloor}
+                  onChange={(e) => handleDimensionChange('heightPerFloor', parseFloat(e.target.value))}
                   style={{
                     width: '100%',
                     padding: '8px',

@@ -806,7 +806,11 @@ export default function BuildingRenderer() {
                 (() => {
                   const memberLevel = getMemberLevel(member.id);
                   if (memberLevel !== -1) {
-                    return uiState.selectedId === (memberLevel === totalFloors ? 'floor-roof' : `floor-${memberLevel}`);
+                    const isFloorSelected = uiState.selectedId === (memberLevel === totalFloors ? 'floor-roof' : `floor-${memberLevel}`);
+                    if (isFloorSelected) {
+                      // Only highlight floor frame members, not wall members
+                      return !member.id.startsWith('wall-');
+                    }
                   }
                   return false;
                 })()
