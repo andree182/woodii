@@ -22,14 +22,14 @@ We are designing together a web F/three.js/jsx (using vite to build) application
   * Floor construction/width
 
 * Configurable outer wall properties:
-  * layers (outer shell, middle layer with insulation and stands, inner layer). For now 3-layers with different widths, in then end the general design can just calculate with total thickness - however the final plan should take all into consideration.
+  * layers (outer shell, middle layer with insulation and stands, inner layer). Support configurable thickness for individual layers (outer siding, middle stud core, inner drywall).
   * elements: windows, doors, and empty openings (for custom elements)
 
 * New/Load/Save/Demo project features should be available
 
 * Main feature is that after this is done, the tool will be able to produce 2x4 building plans:
-  * list of materials
-  * placement of the construction items
+  * Wall-by-wall framing plans and component lists (HIGH PRIORITY): list of all wood components needed per individual wall, including exact lengths and placement offsets along the wall.
+  * Consolidated bill of materials (BOM).
 
 * UI:
   * Allow adjusting the properties by visual dragging of wall sides or manually setting the variables (width, height etc.).
@@ -38,7 +38,12 @@ We are designing together a web F/three.js/jsx (using vite to build) application
   * Allow 'see through' with shown construction items
   * Allow 'see through' for different floors, and to see behind outer walls
 
-* Advanced Construction Rules:
+* Advanced Construction Rules & Foundations:
   * Symmetrical and flush alignment of outer floor joists (rim joists) and roof rafters to cover the exact floor/roof dimensions without offset skew.
   * Dynamic width calculation of saddle roof collar ties based on their elevation to sit flush inside the sloped rafters and avoid outer protrusion.
   * Configurable ceiling/attic floor slab (roof of the top floor) rendered below the roof with custom openings (for attic access, chimneys, etc.).
+  * Configurable foundation options: Concrete Slab vs Ground Screws (automatically calculate and render ground screw layout grids and list them in the BOM).
+
+* Out of Scope:
+  * Small internal or external components (such as wheels, porches, verandas, or nest boxes). Focus is strictly on full floor/wall structural framing, foundations, and siding layers.
+

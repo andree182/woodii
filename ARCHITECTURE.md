@@ -26,6 +26,7 @@ interface ProjectState {
   dimensions: { width: number, depth: number }; // Overall footprint
   floors: Floor[];
   roof: RoofConfig;
+  foundation?: { type: 'slab' | 'screws' }; // Configurable foundation option
   uiState: UIState; // Selection, see-through modes
 }
 
@@ -42,6 +43,7 @@ interface Wall {
   start: [number, number]; // 2D coordinates for the wall line
   end: [number, number];
   layers: { outer: number, middle: number, inner: number }; // thickness config
+  layerThicknesses?: { outer: number, middle: number, inner: number }; // custom absolute thickness overrides in meters
   subObjects: SubObject[];
 }
 
@@ -73,7 +75,7 @@ interface RoofConfig {
 ### 4.2. R3F Canvas Layer
 - **Scene Setup:** Lighting, Environment, OrbitControls.
 - **BuildingRenderer:** Iterates over the `ProjectState` to render `FloorGroup`s.
-- **FloorGroup:** Renders the floor slab and its `WallNode`s.
+- **FloorGroup:** Renders the floor slab (or ground screw grid) and its `WallNode`s.
 - **WallNode:** Computes the 3D mesh based on wall coordinates, applies boolean operations or shader tricks for door/window holes, and renders `SubObjectNode`s.
 - **RoofNode:** Generates the roof geometry based on the `RoofConfig`.
 
@@ -83,39 +85,21 @@ interface RoofConfig {
 
 ## 5. Implementation Phases
 
-**Phase 1: Project Setup & Core State**
-- Initialize Vite React TS project.
-- Install R3F dependencies.
-- Define the typescript interfaces and set up the global state store with initial demo data.
+**Phase 1 to 6: Core Setup, Rendering, Dragging, Sub-objects, Multi-floor, and Framing (Completed)**
 
-**Phase 2: Basic 3D Rendering (Static)**
-- Set up the R3F `<Canvas>` with lighting and camera controls.
-- Implement rendering for basic dimensions: floors, abstract solid walls, and a primitive roof.
-- Ensure the abstract data model correctly projects into the 3D space.
+**Phase 7: Wall-by-Wall Framing Plans & Component Lists (Active/High Priority)**
+- Update the Construction Engine to track host floor and wall associations for each member.
+- Re-architect the BOM UI sidebar tab to offer wall-by-wall schedules, lists, and positioning maps.
 
-**Phase 3: Interactivity & UI Binding**
-- Implement raycasting to allow selecting walls and roofs.
-- Build the React DOM properties panel that reads/writes to the state.
-- Implement basic drag controls to adjust wall sizes/positions visually.
+**Phase 8: Ground Screw Foundation**
+- Introduce a foundation selector in the UI.
+- Implement an algorithm to generate optimal ground screw grid placement and render steel ground screws extending downward in 3D.
+- Add ground screws to the BOM lists.
 
-**Phase 4: Sub-Objects & Wall Details**
-- Implement Windows and Doors.
-- Update the Wall rendering to accommodate holes for sub-objects.
-- Enable dragging of sub-objects along the host wall.
-- Add multi-layer visual representation to the walls (outer, middle, inner).
+**Phase 9: Configurable Siding Layer Thickness**
+- Allow users to configure outer, middle, and inner layer thicknesses.
+- Propagate custom thicknesses to 3D mesh render layers and framing stud width calculations.
 
-**Phase 5: Advanced Viewing & Multi-Floor logic**
-- Implement "see-through" toggles (e.g., modifying material opacity/depth tests to see construction or inner walls).
-- Finalize logic for multi-floor stacking and floor openings/steps.
-
-**Phase 6: The Construction Engine (2x4 Logic)**
-- Develop the algorithm to compute stud placements, top/bottom plates, floor joists, and roof rafters based on the parametric state.
-- Create a specific visual mode to render these 2x4 studs in the 3D view instead of the solid wall layers.
-
-**Phase 7: Plan Export & Persistence**
-- Implement the BOM (Bill of Materials) UI.
-- Wire up Save/Load functionality (JSON serialization of the state to LocalStorage/File).
-- Final polish, ensuring alignment with R3F best practices (performance profiling, minimizing draw calls if necessary).
 
 ## 6. Development Workflow Rules
 - **Verify before advancing:** Each phase must have a working, visible output before moving to the next.
