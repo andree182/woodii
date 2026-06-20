@@ -48,8 +48,8 @@ export default function BuildingRenderer() {
     const matProps = getMaterialProps(floor.id, 'floor', '#555555');
 
     const wallThickness = floor.walls[0]?.thickness || 0.15;
-    const outerW = width + wallThickness;
-    const outerD = depth + wallThickness;
+    const outerW = width + wallThickness * 0.70; // aligned with inner face of cladding
+    const outerD = depth + wallThickness * 0.70;
 
     // Build the 2D Shape of the floor footprint (X-Z plane, drawn in local X-Y)
     const floorShape = new Shape();
@@ -164,57 +164,61 @@ export default function BuildingRenderer() {
     const hLeft = heightPerFloor + (width + wall.thickness) * Math.tan(angleRad);
     const hRight = heightPerFloor;
 
-    // Build the 2D Shape of the wall (along length and height)
-    const wallShape = new Shape();
-    wallShape.moveTo(0, 0);
-    wallShape.lineTo(length, 0);
+    const createWallShape = (xStartOffset: number, xEndOffset: number) => {
+      const shape = new Shape();
+      shape.moveTo(xStartOffset, 0);
+      shape.lineTo(length - xEndOffset, 0);
 
-    let hStart = customHeight;
-    let hEnd = customHeight;
-    const isBack = wall.id === 'wall-back';
-
-    if (isTopFloor && isFlatRoof && (wall.id === 'wall-front' || wall.id === 'wall-back')) {
-      hStart = isBack ? hRight : hLeft;
-      hEnd = isBack ? hLeft : hRight;
-      
-      wallShape.lineTo(length, hEnd);
-      wallShape.lineTo(0, hStart);
-    } else {
-      wallShape.lineTo(length, customHeight);
-      wallShape.lineTo(0, customHeight);
-    }
-    wallShape.closePath();
-
-    // Add holes for each sub-object (door, window, opening)
-    wall.subObjects.forEach((obj) => {
-      const isDoor = obj.type === 'door';
-      const defaultElevation = isDoor ? 0 : (obj.type === 'window' ? 0.9 : 0);
-      const currentElevation = obj.elevation !== undefined ? obj.elevation : defaultElevation;
-      
-      // Calculate wall height at the object's position to clamp elevation
-      let localWallHeightAtObj = customHeight;
+      const isBack = wall.id === 'wall-back';
       if (isTopFloor && isFlatRoof && (wall.id === 'wall-front' || wall.id === 'wall-back')) {
-        localWallHeightAtObj = isBack
-          ? hRight + obj.position * Math.tan(angleRad)
-          : hLeft - obj.position * Math.tan(angleRad);
+        const slopeStartHeight = isBack ? hRight : hLeft;
+        const slopeEndHeight = isBack ? hLeft : hRight;
+        
+        const yStart = slopeStartHeight + (xStartOffset / length) * (slopeEndHeight - slopeStartHeight);
+        const yEnd = slopeStartHeight + ((length - xEndOffset) / length) * (slopeEndHeight - slopeStartHeight);
+
+        shape.lineTo(length - xEndOffset, yEnd);
+        shape.lineTo(xStartOffset, yStart);
+      } else {
+        shape.lineTo(length - xEndOffset, customHeight);
+        shape.lineTo(xStartOffset, customHeight);
       }
-      const clampedElevation = Math.max(0, Math.min(Math.max(0, localWallHeightAtObj - obj.height), currentElevation));
+      shape.closePath();
 
-      const holePath = new Path();
-      const xStart = obj.position - obj.width / 2;
-      const xEnd = obj.position + obj.width / 2;
-      const yStart = clampedElevation;
-      const yEnd = clampedElevation + obj.height;
+      wall.subObjects.forEach((obj) => {
+        const isDoor = obj.type === 'door';
+        const defaultElevation = isDoor ? 0 : (obj.type === 'window' ? 0.9 : 0);
+        const currentElevation = obj.elevation !== undefined ? obj.elevation : defaultElevation;
+        
+        let localWallHeightAtObj = customHeight;
+        if (isTopFloor && isFlatRoof && (wall.id === 'wall-front' || wall.id === 'wall-back')) {
+          localWallHeightAtObj = isBack
+            ? hRight + obj.position * Math.tan(angleRad)
+            : hLeft - obj.position * Math.tan(angleRad);
+        }
+        const clampedElevation = Math.max(0, Math.min(Math.max(0, localWallHeightAtObj - obj.height), currentElevation));
 
-      // Clockwise path definition to carve hole in CCW wallShape
-      holePath.moveTo(xStart, yStart);
-      holePath.lineTo(xStart, yEnd);
-      holePath.lineTo(xEnd, yEnd);
-      holePath.lineTo(xEnd, yStart);
-      holePath.closePath();
+        const objLeft = obj.position - obj.width / 2;
+        const objRight = obj.position + obj.width / 2;
+        if (objRight > xStartOffset && objLeft < length - xEndOffset) {
+          const holePath = new Path();
+          const xStart = Math.max(xStartOffset, objLeft);
+          const xEnd = Math.min(length - xEndOffset, objRight);
+          const yStart = clampedElevation;
+          const yEnd = clampedElevation + obj.height;
 
-      wallShape.holes.push(holePath);
-    });
+          holePath.moveTo(xStart, yStart);
+          holePath.lineTo(xStart, yEnd);
+          holePath.lineTo(xEnd, yEnd);
+          holePath.lineTo(xEnd, yStart);
+          holePath.closePath();
+
+          shape.holes.push(holePath);
+        }
+      });
+
+      return shape;
+    };
 
     const wallCenterX = (startX + endX) / 2;
     const wallCenterZ = (startZ + endZ) / 2;
@@ -229,6 +233,7 @@ export default function BuildingRenderer() {
 
           // Layer definitions: [keySuffix, localZOffset, depth, defaultColor, defaultOpacity]
           // Outer cladding is on the positive local Z side (+T/2), inner drywall is on the negative local Z side (-T/2)
+          const isSideWall = wall.id === 'wall-left' || wall.id === 'wall-right';
           const layers = [
             {
               suffix: 'outer',
@@ -236,6 +241,8 @@ export default function BuildingRenderer() {
               depth: T * 0.15,
               color: '#8b5a2b', // Wood siding brown
               opacity: mode === 'seeThrough' ? 0.15 : 1.0,
+              xStartOffset: isSideWall ? -T : T * 0.15,
+              xEndOffset: isSideWall ? -T : T * 0.15,
             },
             {
               suffix: 'middle',
@@ -243,6 +250,8 @@ export default function BuildingRenderer() {
               depth: T * 0.70,
               color: '#ded29e', // Rockwool insulation yellow
               opacity: mode === 'seeThrough' ? 0.25 : 1.0,
+              xStartOffset: isSideWall ? -T * 0.15 : T * 0.15,
+              xEndOffset: isSideWall ? -T * 0.15 : T * 0.15,
             },
             {
               suffix: 'inner',
@@ -250,6 +259,8 @@ export default function BuildingRenderer() {
               depth: T * 0.15,
               color: '#e6e6e6', // Drywall off-white
               opacity: mode === 'seeThrough' ? 0.5 : 1.0,
+              xStartOffset: isSideWall ? -T * 0.15 : T * 0.85,
+              xEndOffset: isSideWall ? -T * 0.15 : T * 0.85,
             }
           ];
 
@@ -259,6 +270,7 @@ export default function BuildingRenderer() {
                 const layerColor = isSelected ? '#ff8c00' : layer.color;
                 const layerOpacity = isSelected ? Math.min(1.0, layer.opacity + 0.15) : layer.opacity;
                 const isTransparent = mode === 'seeThrough';
+                const shape = createWallShape(layer.xStartOffset, layer.xEndOffset);
 
                 return (
                   <mesh
@@ -271,7 +283,7 @@ export default function BuildingRenderer() {
                       selectObject(wallId, 'wall');
                     }}
                   >
-                    <extrudeGeometry args={[wallShape, { depth: layer.depth, bevelEnabled: false }]} />
+                    <extrudeGeometry args={[shape, { depth: layer.depth, bevelEnabled: false }]} />
                     <meshStandardMaterial
                       color={layerColor}
                       roughness={0.7}
@@ -404,10 +416,10 @@ export default function BuildingRenderer() {
                 }}
               >
                 <boxGeometry args={[obj.width, obj.height, wall.thickness + 0.04]} />
-                <meshStandardMaterial 
-                  {...objMatProps} 
-                  roughness={0.3} 
-                  metalness={isWindow ? 0.9 : 0.1}
+                <meshBasicMaterial 
+                  transparent={true} 
+                  opacity={0} 
+                  depthWrite={false} 
                 />
               </mesh>
 
@@ -554,12 +566,16 @@ export default function BuildingRenderer() {
       leftSlopeShape.lineTo(-halfRoofWidth, topElevation - overhang * Math.tan(angleRad) + tVertical);
       leftSlopeShape.closePath();
 
-      // Create a flat triangular shape for the gable wall (spans exactly wall width + thickness)
-      const gableShape = new Shape();
-      gableShape.moveTo(-halfGableWidth, 0);
-      gableShape.lineTo(0, halfGableWidth * Math.tan(angleRad));
-      gableShape.lineTo(halfGableWidth, 0);
-      gableShape.closePath();
+      // Helper to generate the triangular shape of each gable layer with custom side offsets
+      const createGableShape = (xOffset: number) => {
+        const shape = new Shape();
+        const w = halfGableWidth - xOffset;
+        shape.moveTo(-w, 0);
+        shape.lineTo(0, w * Math.tan(angleRad));
+        shape.lineTo(w, 0);
+        shape.closePath();
+        return shape;
+      };
 
       return (
         <group
@@ -589,25 +605,28 @@ export default function BuildingRenderer() {
                 const isSelected = uiState.selectedId === 'roof';
                 const mode = uiState.seeThroughMode;
                 const layers = [
-                  { suffix: 'outer', zOffset: T * 0.85, depth: T * 0.15, color: '#8b5a2b', opacity: mode === 'seeThrough' ? 0.15 : 1.0 },
-                  { suffix: 'middle', zOffset: T * 0.15, depth: T * 0.70, color: '#ded29e', opacity: mode === 'seeThrough' ? 0.25 : 1.0 },
-                  { suffix: 'inner', zOffset: 0, depth: T * 0.15, color: '#e6e6e6', opacity: mode === 'seeThrough' ? 0.5 : 1.0 }
+                  { suffix: 'outer', zOffset: T * 0.85, depth: T * 0.15, color: '#8b5a2b', opacity: mode === 'seeThrough' ? 0.15 : 1.0, xOffset: T * 0.15 },
+                  { suffix: 'middle', zOffset: T * 0.15, depth: T * 0.70, color: '#ded29e', opacity: mode === 'seeThrough' ? 0.25 : 1.0, xOffset: T * 0.15 },
+                  { suffix: 'inner', zOffset: 0, depth: T * 0.15, color: '#e6e6e6', opacity: mode === 'seeThrough' ? 0.5 : 1.0, xOffset: T * 0.85 }
                 ];
                 return (
                   <group position={[0, topElevation, depth / 2 - T / 2]} rotation={[0, 0, 0]}>
-                    {layers.map((layer) => (
-                      <mesh key={`front-gable-${layer.suffix}`} position={[0, 0, layer.zOffset]} castShadow receiveShadow>
-                        <extrudeGeometry args={[gableShape, { depth: layer.depth, bevelEnabled: false }]} />
-                        <meshStandardMaterial
-                          color={isSelected ? '#ff8c00' : layer.color}
-                          roughness={0.7}
-                          transparent={mode === 'seeThrough'}
-                          opacity={layer.opacity}
-                          depthWrite={mode !== 'seeThrough'}
-                          side={mode === 'seeThrough' ? DoubleSide : FrontSide}
-                        />
-                      </mesh>
-                    ))}
+                    {layers.map((layer) => {
+                      const shape = createGableShape(layer.xOffset);
+                      return (
+                        <mesh key={`front-gable-${layer.suffix}`} position={[0, 0, layer.zOffset]} castShadow receiveShadow>
+                          <extrudeGeometry args={[shape, { depth: layer.depth, bevelEnabled: false }]} />
+                          <meshStandardMaterial
+                            color={isSelected ? '#ff8c00' : layer.color}
+                            roughness={0.7}
+                            transparent={mode === 'seeThrough'}
+                            opacity={layer.opacity}
+                            depthWrite={mode !== 'seeThrough'}
+                            side={mode === 'seeThrough' ? DoubleSide : FrontSide}
+                          />
+                        </mesh>
+                      );
+                    })}
                   </group>
                 );
               })()}
@@ -618,25 +637,28 @@ export default function BuildingRenderer() {
                 const isSelected = uiState.selectedId === 'roof';
                 const mode = uiState.seeThroughMode;
                 const layers = [
-                  { suffix: 'outer', zOffset: T * 0.85, depth: T * 0.15, color: '#8b5a2b', opacity: mode === 'seeThrough' ? 0.15 : 1.0 },
-                  { suffix: 'middle', zOffset: T * 0.15, depth: T * 0.70, color: '#ded29e', opacity: mode === 'seeThrough' ? 0.25 : 1.0 },
-                  { suffix: 'inner', zOffset: 0, depth: T * 0.15, color: '#e6e6e6', opacity: mode === 'seeThrough' ? 0.5 : 1.0 }
+                  { suffix: 'outer', zOffset: T * 0.85, depth: T * 0.15, color: '#8b5a2b', opacity: mode === 'seeThrough' ? 0.15 : 1.0, xOffset: T * 0.15 },
+                  { suffix: 'middle', zOffset: T * 0.15, depth: T * 0.70, color: '#ded29e', opacity: mode === 'seeThrough' ? 0.25 : 1.0, xOffset: T * 0.15 },
+                  { suffix: 'inner', zOffset: 0, depth: T * 0.15, color: '#e6e6e6', opacity: mode === 'seeThrough' ? 0.5 : 1.0, xOffset: T * 0.85 }
                 ];
                 return (
                   <group position={[0, topElevation, -depth / 2 + T / 2]} rotation={[0, Math.PI, 0]}>
-                    {layers.map((layer) => (
-                      <mesh key={`back-gable-${layer.suffix}`} position={[0, 0, layer.zOffset]} castShadow receiveShadow>
-                        <extrudeGeometry args={[gableShape, { depth: layer.depth, bevelEnabled: false }]} />
-                        <meshStandardMaterial
-                          color={isSelected ? '#ff8c00' : layer.color}
-                          roughness={0.7}
-                          transparent={mode === 'seeThrough'}
-                          opacity={layer.opacity}
-                          depthWrite={mode !== 'seeThrough'}
-                          side={mode === 'seeThrough' ? DoubleSide : FrontSide}
-                        />
-                      </mesh>
-                    ))}
+                    {layers.map((layer) => {
+                      const shape = createGableShape(layer.xOffset);
+                      return (
+                        <mesh key={`back-gable-${layer.suffix}`} position={[0, 0, layer.zOffset]} castShadow receiveShadow>
+                          <extrudeGeometry args={[shape, { depth: layer.depth, bevelEnabled: false }]} />
+                          <meshStandardMaterial
+                            color={isSelected ? '#ff8c00' : layer.color}
+                            roughness={0.7}
+                            transparent={mode === 'seeThrough'}
+                            opacity={layer.opacity}
+                            depthWrite={mode !== 'seeThrough'}
+                            side={mode === 'seeThrough' ? DoubleSide : FrontSide}
+                          />
+                        </mesh>
+                      );
+                    })}
                   </group>
                 );
               })()}

@@ -25,8 +25,8 @@ export function generateFraming(state: ProjectState): FramingMember[] {
     const joistThickness = 0.04;
     
     const wallThickness = floor.walls[0]?.thickness || 0.15;
-    const outerW = width + wallThickness;
-    const outerD = depth + wallThickness;
+    const outerW = width + wallThickness * 0.70;
+    const outerD = depth + wallThickness * 0.70;
 
     // Front and Back Rim Joists
     members.push({
@@ -480,7 +480,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         members.push({
           id: `roof-collar-tie-${i}`,
           type: 'joist',
-          position: [0, collarY, rz],
+          position: [0, collarY, rz + rafterThickness],
           rotation: [0, 0, 0],
           size: [collarWidth, 0.09, rafterThickness],
         });
