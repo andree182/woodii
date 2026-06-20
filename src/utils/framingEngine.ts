@@ -146,9 +146,9 @@ export function generateFraming(state: ProjectState): FramingMember[] {
 
       if (isTopFloor && isFlatRoof) {
         if (wall.id === 'wall-left') {
-          wallBaseHeight = heightPerFloor + (width / 2) * Math.tan(angleRad);
+          wallBaseHeight = heightPerFloor + (width / 2 - wall.thickness * 0.5) * Math.tan(angleRad);
         } else if (wall.id === 'wall-right') {
-          wallBaseHeight = heightPerFloor - (width / 2) * Math.tan(angleRad);
+          wallBaseHeight = heightPerFloor - (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
         } else if (wall.id === 'wall-front' || wall.id === 'wall-back') {
           const hl = heightPerFloor + (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
           const hr = heightPerFloor - (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
@@ -401,13 +401,14 @@ export function generateFraming(state: ProjectState): FramingMember[] {
   const { overhang, inclination, thickness, type } = state.roof;
   const angleRad = (inclination * Math.PI) / 180;
 
+  const wallThickness = state.floors[0]?.walls[0]?.thickness || 0.15;
   if (type === 'flat') {
     // Flat roof joists/rafters sloping along inclination
     const rafterSpacing = 0.6;
     const rafterCount = Math.floor(depth / rafterSpacing) + 1;
     const rafterThickness = 0.04;
     const rafterHeight = 0.14; // 2x6 rafters
-    const rafterLength = width / Math.cos(angleRad) + overhang * 2;
+    const rafterLength = (width + wallThickness) / Math.cos(angleRad) + overhang * 2;
 
     for (let i = 0; i < rafterCount; i++) {
       const rz = -depth / 2 + i * rafterSpacing;
@@ -430,24 +431,25 @@ export function generateFraming(state: ProjectState): FramingMember[] {
     // Ridge beam along the Z center line
     const ridgeLength = depth + overhang * 2;
     const ridgeHeight = 0.18; // 2x8 ridge beam
+    const halfGableWidth = width / 2 + wallThickness * 0.5;
+    
     members.push({
       id: `roof-ridge-beam`,
       type: 'ridge',
-      position: [0, topElevation + (width / 2) * Math.tan(angleRad) + ridgeHeight / 2, 0],
+      position: [0, topElevation + halfGableWidth * Math.tan(angleRad) + ridgeHeight / 2, 0],
       rotation: [0, 0, 0],
       size: [lumberThickness, ridgeHeight, ridgeLength],
     });
 
-    const halfRoofWidth = width / 2 + overhang;
+    const halfRoofWidth = halfGableWidth + overhang;
     const slopeLength = halfRoofWidth / Math.cos(angleRad);
 
     for (let i = 0; i < rafterCount; i++) {
       const rz = -depth / 2 - overhang + i * rafterSpacing;
 
       // Right slope rafters
-      // Center along slope X: halfRoofWidth / 2
       const rightX = halfRoofWidth / 2;
-      const rightY = topElevation + (halfRoofWidth / 2) * Math.tan(angleRad);
+      const rightY = topElevation + (halfGableWidth - halfRoofWidth / 2) * Math.tan(angleRad) + (rafterHeight / 2) / Math.cos(angleRad);
       members.push({
         id: `roof-rafter-saddle-right-${i}`,
         type: 'rafter',
@@ -458,7 +460,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
 
       // Left slope rafters
       const leftX = -halfRoofWidth / 2;
-      const leftY = topElevation + (halfRoofWidth / 2) * Math.tan(angleRad);
+      const leftY = topElevation + (halfGableWidth - halfRoofWidth / 2) * Math.tan(angleRad) + (rafterHeight / 2) / Math.cos(angleRad);
       members.push({
         id: `roof-rafter-saddle-left-${i}`,
         type: 'rafter',

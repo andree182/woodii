@@ -150,9 +150,9 @@ export default function BuildingRenderer() {
 
     if (isTopFloor && isFlatRoof) {
       if (wall.id === 'wall-left') {
-        customHeight = heightPerFloor + (width / 2) * Math.tan(angleRad);
+        customHeight = heightPerFloor + (width / 2 - wall.thickness * 0.5) * Math.tan(angleRad);
       } else if (wall.id === 'wall-right') {
-        customHeight = heightPerFloor - (width / 2) * Math.tan(angleRad);
+        customHeight = heightPerFloor - (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
       }
     }
 
@@ -456,7 +456,8 @@ export default function BuildingRenderer() {
     const angleRad = (inclination * Math.PI) / 180;
 
     if (type === 'flat') {
-      const roofWidth = width / Math.cos(angleRad) + overhang * 2;
+      const wallThickness = floors[0]?.walls[0]?.thickness || 0.15;
+      const roofWidth = (width + wallThickness) / Math.cos(angleRad) + overhang * 2;
       const roofDepth = depth + overhang * 2;
       const tVertical = thickness / Math.cos(angleRad);
       
@@ -477,29 +478,29 @@ export default function BuildingRenderer() {
       );
     } else {
       // Saddle Roof: Ridge runs along Z-axis, slopes down on +/- X sides
-      const halfRoofWidth = width / 2 + overhang;
+      const wallThickness = floors[0]?.walls[0]?.thickness || 0.15;
+      const halfGableWidth = width / 2 + wallThickness * 0.5;
+      const halfRoofWidth = halfGableWidth + overhang;
       const tVertical = thickness / Math.cos(angleRad);
       
       const roofDepth = depth + overhang * 2;
 
-      // Create mitered shapes in X-Y plane where bottom face rests exactly on top-plate (Y = topElevation) at X = +/- W/2
+      // Create mitered shapes in X-Y plane where bottom face rests exactly on top-plate (Y = topElevation) at X = +/- halfGableWidth
       const rightSlopeShape = new Shape();
-      rightSlopeShape.moveTo(0, topElevation + (width / 2) * Math.tan(angleRad) + tVertical);
-      rightSlopeShape.lineTo(0, topElevation + (width / 2) * Math.tan(angleRad));
+      rightSlopeShape.moveTo(0, topElevation + halfGableWidth * Math.tan(angleRad) + tVertical);
+      rightSlopeShape.lineTo(0, topElevation + halfGableWidth * Math.tan(angleRad));
       rightSlopeShape.lineTo(halfRoofWidth, topElevation - overhang * Math.tan(angleRad));
       rightSlopeShape.lineTo(halfRoofWidth, topElevation - overhang * Math.tan(angleRad) + tVertical);
       rightSlopeShape.closePath();
 
       const leftSlopeShape = new Shape();
-      leftSlopeShape.moveTo(0, topElevation + (width / 2) * Math.tan(angleRad) + tVertical);
-      leftSlopeShape.lineTo(0, topElevation + (width / 2) * Math.tan(angleRad));
+      leftSlopeShape.moveTo(0, topElevation + halfGableWidth * Math.tan(angleRad) + tVertical);
+      leftSlopeShape.lineTo(0, topElevation + halfGableWidth * Math.tan(angleRad));
       leftSlopeShape.lineTo(-halfRoofWidth, topElevation - overhang * Math.tan(angleRad));
       leftSlopeShape.lineTo(-halfRoofWidth, topElevation - overhang * Math.tan(angleRad) + tVertical);
       leftSlopeShape.closePath();
 
       // Create a flat triangular shape for the gable wall (spans exactly wall width + thickness)
-      const wallThickness = floors[0]?.walls[0]?.thickness || 0.15;
-      const halfGableWidth = width / 2 + wallThickness * 0.5;
       const gableShape = new Shape();
       gableShape.moveTo(-halfGableWidth, 0);
       gableShape.lineTo(0, halfGableWidth * Math.tan(angleRad));
