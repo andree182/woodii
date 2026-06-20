@@ -1,10 +1,13 @@
 import { useState, ChangeEvent } from 'react';
 import { useProjectStore } from '../store';
 import { BuildingType } from '../types';
-import { generateFraming } from '../utils/framingEngine';
+import { generateFraming, FramingMember } from '../utils/framingEngine';
 
 export default function Sidebar() {
   const [activeTab, setActiveTab] = useState<'design' | 'bom'>('design');
+  const [bomViewMode, setBomViewMode] = useState<'global' | 'walls'>('walls');
+  const [expandedWalls, setExpandedWalls] = useState<{[key: string]: boolean}>({});
+
 
   const {
     buildingType,
@@ -851,10 +854,46 @@ export default function Sidebar() {
           </section>
 
           {/* Material Take-off List */}
-          <section style={{ flex: 1 }}>
+          <section style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
             <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>
               Material Take-off (BOM)
             </h3>
+
+            {/* View Mode Toggle */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+              <button
+                onClick={() => setBomViewMode('walls')}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  backgroundColor: bomViewMode === 'walls' ? '#ff8c00' : '#333',
+                  color: bomViewMode === 'walls' ? '#000' : '#ccc',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '11px',
+                }}
+              >
+                Wall-by-Wall Plans
+              </button>
+              <button
+                onClick={() => setBomViewMode('global')}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  backgroundColor: bomViewMode === 'global' ? '#ff8c00' : '#333',
+                  color: bomViewMode === 'global' ? '#000' : '#ccc',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '11px',
+                }}
+              >
+                Global Cut List
+              </button>
+            </div>
             
             {bomList.length === 0 ? (
               <p style={{ fontSize: '12px', color: '#666', fontStyle: 'italic' }}>No framing members generated.</p>
@@ -884,31 +923,251 @@ export default function Sidebar() {
                   </div>
                 </div>
 
-                {/* Detailed Table */}
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid #333', color: '#888' }}>
-                        <th style={{ padding: '6px 4px' }}>Lumber Type</th>
-                        <th style={{ padding: '6px 4px', textAlign: 'right' }}>Len (m)</th>
-                        <th style={{ padding: '6px 4px', textAlign: 'right' }}>Qty</th>
-                        <th style={{ padding: '6px 4px', textAlign: 'right' }}>Total (m)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bomList.map((item, idx) => (
-                        <tr key={idx} style={{ borderBottom: '1px solid #2a2a2a' }}>
-                          <td style={{ padding: '6px 4px', color: '#e0e0e0' }}>{item.nominal}</td>
-                          <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{item.length.toFixed(2)}</td>
-                          <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{item.count}</td>
-                          <td style={{ padding: '6px 4px', textAlign: 'right', color: '#fff', fontWeight: 600 }}>
-                            {(item.length * item.count).toFixed(2)}
-                          </td>
+                {bomViewMode === 'walls' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '4px' }}>
+                    {floors.map((floor) => {
+                      const floorJoists = framing.filter(m => m.floorId === floor.id && m.type === 'joist' && !m.id.startsWith('roof-'));
+                      
+                      return (
+                        <div key={floor.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            color: '#ff8c00',
+                            borderBottom: '1px solid #444',
+                            paddingBottom: '4px',
+                            marginTop: '8px',
+                          }}>
+                            {floor.level === 0 ? 'Ground Floor' : `Floor ${floor.level + 1}`}
+                          </div>
+
+                          {/* Floor Joists Frame */}
+                          {floorJoists.length > 0 && (() => {
+                            const joistsKey = `${floor.id}-joists`;
+                            const isJoistsSelected = selectedType === 'floor' && selectedId === floor.id;
+                            const isExpanded = expandedWalls[joistsKey] || isJoistsSelected;
+                            
+                            return (
+                              <div style={{
+                                backgroundColor: isJoistsSelected ? '#26211a' : '#1e1e1e',
+                                borderRadius: '6px',
+                                border: isJoistsSelected ? '1px solid #ff8c00' : '1px solid #333',
+                                boxShadow: isJoistsSelected ? '0 0 8px rgba(255, 140, 0, 0.2)' : 'none',
+                                overflow: 'hidden',
+                              }}>
+                                <div
+                                  onClick={() => {
+                                    if (isJoistsSelected) {
+                                      selectObject(null, null);
+                                      setExpandedWalls(prev => ({ ...prev, [joistsKey]: false }));
+                                    } else {
+                                      selectObject(floor.id, 'floor');
+                                      setExpandedWalls(prev => ({ ...prev, [joistsKey]: true }));
+                                    }
+                                  }}
+                                  style={{
+                                    padding: '10px 12px',
+                                    backgroundColor: isJoistsSelected ? '#3a2d1d' : '#2a2a2a',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  <div>
+                                    <strong style={{ fontSize: '11px', color: isJoistsSelected ? '#ff8c00' : '#eee' }}>Floor Joists Frame</strong>
+                                    <span style={{ fontSize: '10px', color: '#888', marginLeft: '8px' }}>
+                                      ({floorJoists.length} pcs)
+                                    </span>
+                                  </div>
+                                  <span style={{ fontSize: '10px', color: '#ff8c00' }}>
+                                    {isExpanded ? '▲ Collapse' : '▼ Expand'}
+                                  </span>
+                                </div>
+                                {isExpanded && (
+                                  <div style={{ padding: '10px', backgroundColor: '#151515' }}>
+                                    {renderJoistsCutList(floorJoists)}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+
+                          {/* Wall Framing */}
+                          {floor.walls.map((wall) => {
+                            const wallKey = `${floor.id}-${wall.id}`;
+                            const wallMembers = framing.filter(m => m.floorId === floor.id && m.wallId === wall.id);
+                            
+                            const dx = wall.end[0] - wall.start[0];
+                            const dz = wall.end[1] - wall.start[1];
+                            const wallLength = Math.sqrt(dx * dx + dz * dz);
+                            
+                            const wallTitle = wall.id === 'wall-front' ? 'Front Wall' :
+                                              wall.id === 'wall-back' ? 'Back Wall' :
+                                              wall.id === 'wall-left' ? 'Left Wall' :
+                                              wall.id === 'wall-right' ? 'Right Wall' : wall.id;
+
+                            const isWallSelected = selectedType === 'wall' && selectedId === wallKey;
+                            const isExpanded = expandedWalls[wallKey] || isWallSelected;
+
+                            return (
+                              <div
+                                key={wall.id}
+                                style={{
+                                  backgroundColor: isWallSelected ? '#26211a' : '#1e1e1e',
+                                  borderRadius: '6px',
+                                  border: isWallSelected ? '1px solid #ff8c00' : '1px solid #333',
+                                  boxShadow: isWallSelected ? '0 0 8px rgba(255, 140, 0, 0.2)' : 'none',
+                                  overflow: 'hidden',
+                                }}
+                              >
+                                <div
+                                  onClick={() => {
+                                    if (isWallSelected) {
+                                      selectObject(null, null);
+                                      setExpandedWalls(prev => ({ ...prev, [wallKey]: false }));
+                                    } else {
+                                      selectObject(wallKey, 'wall');
+                                      setExpandedWalls(prev => ({ ...prev, [wallKey]: true }));
+                                    }
+                                  }}
+                                  style={{
+                                    padding: '10px 12px',
+                                    backgroundColor: isWallSelected ? '#3a2d1d' : '#2a2a2a',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  <div>
+                                    <strong style={{ fontSize: '11px', color: isWallSelected ? '#ff8c00' : '#eee' }}>{wallTitle}</strong>
+                                    <span style={{ fontSize: '10px', color: '#888', marginLeft: '8px' }}>
+                                      ({wallLength.toFixed(2)}m, {wallMembers.length} pcs)
+                                    </span>
+                                  </div>
+                                  <span style={{ fontSize: '10px', color: '#ff8c00' }}>
+                                    {isExpanded ? '▲ Collapse' : '▼ Expand'}
+                                  </span>
+                                </div>
+
+                                {isExpanded && (
+                                  <div style={{ padding: '10px', backgroundColor: '#151515', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {wall.subObjects.length > 0 && (
+                                      <div style={{ fontSize: '10px', color: '#aaa', backgroundColor: '#222', padding: '6px 8px', borderRadius: '4px', borderLeft: '3px solid #ff8c00' }}>
+                                        <strong>Openings:</strong> {wall.subObjects.map((obj: any) => `${obj.type.toUpperCase()} (W: ${obj.width.toFixed(2)}m, H: ${obj.height.toFixed(2)}m, Pos: ${obj.position.toFixed(2)}m)`).join(', ')}
+                                      </div>
+                                    )}
+                                    {wallMembers.length === 0 ? (
+                                      <p style={{ fontSize: '11px', color: '#666', fontStyle: 'italic', margin: 0 }}>No framing generated for this wall.</p>
+                                    ) : (
+                                      renderWallFramingCutList(wallMembers, wall)
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+
+                    {/* Roof Framing */}
+                    {(() => {
+                      const roofMembers = framing.filter(m => !m.floorId && !m.wallId);
+                      if (roofMembers.length === 0) return null;
+
+                      const isRoofSelected = selectedType === 'roof' && selectedId === 'roof';
+                      const isExpanded = expandedWalls['roof-framing'] || isRoofSelected;
+
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            color: '#ff8c00',
+                            borderBottom: '1px solid #444',
+                            paddingBottom: '4px',
+                            marginTop: '8px',
+                          }}>
+                            Roof Framing
+                          </div>
+
+                          <div style={{
+                            backgroundColor: isRoofSelected ? '#26211a' : '#1e1e1e',
+                            borderRadius: '6px',
+                            border: isRoofSelected ? '1px solid #ff8c00' : '1px solid #333',
+                            boxShadow: isRoofSelected ? '0 0 8px rgba(255, 140, 0, 0.2)' : 'none',
+                            overflow: 'hidden',
+                          }}>
+                            <div
+                              onClick={() => {
+                                if (isRoofSelected) {
+                                  selectObject(null, null);
+                                  setExpandedWalls(prev => ({ ...prev, ['roof-framing']: false }));
+                                } else {
+                                  selectObject('roof', 'roof');
+                                  setExpandedWalls(prev => ({ ...prev, ['roof-framing']: true }));
+                                }
+                              }}
+                              style={{
+                                padding: '10px 12px',
+                                backgroundColor: isRoofSelected ? '#3a2d1d' : '#2a2a2a',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                              }}
+                            >
+                              <div>
+                                <strong style={{ fontSize: '11px', color: isRoofSelected ? '#ff8c00' : '#eee' }}>Roof Truss & Rafters</strong>
+                                <span style={{ fontSize: '10px', color: '#888', marginLeft: '8px' }}>
+                                  ({roofMembers.length} pcs)
+                                </span>
+                              </div>
+                              <span style={{ fontSize: '10px', color: '#ff8c00' }}>
+                                {isExpanded ? '▲ Collapse' : '▼ Expand'}
+                              </span>
+                            </div>
+                            {isExpanded && (
+                              <div style={{ padding: '10px', backgroundColor: '#151515' }}>
+                                {renderRoofCutList(roofMembers)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  /* Consolidated/Global List Table */
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid #333', color: '#888' }}>
+                          <th style={{ padding: '6px 4px' }}>Lumber Type</th>
+                          <th style={{ padding: '6px 4px', textAlign: 'right' }}>Len (m)</th>
+                          <th style={{ padding: '6px 4px', textAlign: 'right' }}>Qty</th>
+                          <th style={{ padding: '6px 4px', textAlign: 'right' }}>Total (m)</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {bomList.map((item, idx) => (
+                          <tr key={idx} style={{ borderBottom: '1px solid #2a2a2a' }}>
+                            <td style={{ padding: '6px 4px', color: '#e0e0e0' }}>{item.nominal}</td>
+                            <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{item.length.toFixed(2)}</td>
+                            <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{item.count}</td>
+                            <td style={{ padding: '6px 4px', textAlign: 'right', color: '#fff', fontWeight: 600 }}>
+                              {(item.length * item.count).toFixed(2)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </section>
@@ -917,3 +1176,261 @@ export default function Sidebar() {
     </div>
   );
 }
+
+// ============================================================================
+// HELPER FUNCTIONS FOR BILL OF MATERIALS & CUT LISTS
+// ============================================================================
+
+const getWallMemberDetails = (member: FramingMember, wall: any) => {
+  const [startX, startZ] = wall.start;
+  const [endX, endZ] = wall.end;
+  const dx = endX - startX;
+  const dz = endZ - startZ;
+  const wallLength = Math.sqrt(dx * dx + dz * dz);
+  
+  const unitX = dx / (wallLength || 1);
+  const unitZ = dz / (wallLength || 1);
+
+  const [px, , pz] = member.position;
+  // Project member coordinates onto wall direction vector to get local offset
+  const localX = (px - startX) * unitX + (pz - startZ) * unitZ;
+
+  // Group label/role mapping
+  let role = 'Stud';
+  if (member.id.includes('bottom-plate')) role = 'Bottom Plate';
+  else if (member.id.includes('top-plate-1')) role = 'Top Plate (Lower)';
+  else if (member.id.includes('top-plate-2')) role = 'Top Plate (Upper)';
+  else if (member.id.includes('stud-start') || member.id.includes('stud-end')) role = 'Corner Stud';
+  else if (member.id.includes('corner-backing')) role = 'Corner Backing Stud';
+  else if (member.id.includes('spaced')) role = 'Common Stud';
+  else if (member.id.includes('king')) role = 'King Stud';
+  else if (member.id.includes('jack')) role = 'Jack Stud';
+  else if (member.id.includes('header')) role = 'Header';
+  else if (member.id.includes('sill')) role = 'Window Sill';
+  else if (member.id.includes('cripple-under')) role = 'Under-Sill Cripple';
+  else if (member.id.includes('cripple-above')) role = 'Over-Header Cripple';
+
+  const [w, h, d] = member.size;
+  const len = Math.max(w, h, d);
+
+  // Determine nominal size
+  const sortedDims = [...member.size].sort((a, b) => a - b);
+  const midDim = sortedDims[1];
+  const nominal = midDim > 0.1 || member.type === 'header' ? '2x6 (40x140mm)' : '2x4 (40x90mm)';
+
+  const isVertical = member.type === 'stud';
+
+  return {
+    nominal,
+    role,
+    len,
+    localX,
+    isVertical,
+  };
+};
+
+const renderWallFramingCutList = (members: FramingMember[], wall: any) => {
+  const groups: {
+    [key: string]: {
+      nominal: string;
+      role: string;
+      length: number;
+      count: number;
+      positions: number[];
+      isVertical: boolean;
+    }
+  } = {};
+
+  members.forEach((m) => {
+    const details = getWallMemberDetails(m, wall);
+    const key = `${details.nominal}-${details.role}-${details.len.toFixed(3)}`;
+    if (!groups[key]) {
+      groups[key] = {
+        nominal: details.nominal,
+        role: details.role,
+        length: details.len,
+        count: 0,
+        positions: [],
+        isVertical: details.isVertical,
+      };
+    }
+    groups[key].count++;
+    groups[key].positions.push(details.localX);
+  });
+
+  const sortedGroups = Object.values(groups).sort((a, b) => {
+    // Sort plates first, then studs by length descending
+    if (a.role.includes('Plate') && !b.role.includes('Plate')) return -1;
+    if (!a.role.includes('Plate') && b.role.includes('Plate')) return 1;
+    return b.length - a.length;
+  });
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid #333', color: '#888' }}>
+            <th style={{ padding: '6px 4px' }}>Nominal</th>
+            <th style={{ padding: '6px 4px' }}>Component</th>
+            <th style={{ padding: '6px 4px', textAlign: 'right' }}>Len (m)</th>
+            <th style={{ padding: '6px 4px', textAlign: 'right' }}>Qty</th>
+            <th style={{ padding: '6px 4px' }}>Placement Offsets / Spans</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedGroups.map((g, idx) => {
+            let placementText = '';
+            if (g.isVertical) {
+              const sortedPos = [...g.positions].sort((a, b) => a - b);
+              placementText = sortedPos.map(p => `${p.toFixed(2)}m`).join(', ');
+            } else {
+              const sortedSpans = [...g.positions].map(center => {
+                const start = Math.max(0, center - g.length / 2);
+                const end = center + g.length / 2;
+                return `spans ${start.toFixed(2)}m-${end.toFixed(2)}m`;
+              }).join(', ');
+              placementText = sortedSpans;
+            }
+
+            return (
+              <tr key={idx} style={{ borderBottom: '1px solid #2a2a2a' }}>
+                <td style={{ padding: '6px 4px', color: '#ccc' }}>{g.nominal}</td>
+                <td style={{ padding: '6px 4px', color: '#eee', fontWeight: 600 }}>{g.role}</td>
+                <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{g.length.toFixed(2)}</td>
+                <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{g.count}</td>
+                <td style={{ padding: '6px 4px', color: '#ff8c00', fontSize: '10px', fontFamily: 'monospace' }}>
+                  {placementText}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+const renderJoistsCutList = (joists: FramingMember[]) => {
+  const groups: {
+    [key: string]: {
+      nominal: string;
+      type: string;
+      length: number;
+      count: number;
+    }
+  } = {};
+
+  joists.forEach((j) => {
+    const [w, h, d] = j.size;
+    const len = Math.max(w, h, d);
+    const nominal = d > 0.1 || j.type === 'joist' || j.id.includes('rim')
+      ? '2x6 (40x140mm)'
+      : '2x4 (40x90mm)';
+
+    let typeLabel = j.id.includes('rim') ? 'Rim Joist' : (j.id.includes('header') ? 'Stair Header' : 'Floor Joist');
+    const key = `${nominal}-${typeLabel}-${len.toFixed(3)}`;
+
+    if (!groups[key]) {
+      groups[key] = {
+        nominal,
+        type: typeLabel,
+        length: len,
+        count: 0,
+      };
+    }
+    groups[key].count++;
+  });
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid #333', color: '#888' }}>
+            <th style={{ padding: '6px 4px' }}>Nominal</th>
+            <th style={{ padding: '6px 4px' }}>Component</th>
+            <th style={{ padding: '6px 4px', textAlign: 'right' }}>Len (m)</th>
+            <th style={{ padding: '6px 4px', textAlign: 'right' }}>Qty</th>
+            <th style={{ padding: '6px 4px', textAlign: 'right' }}>Total (m)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.values(groups).map((g, idx) => (
+            <tr key={idx} style={{ borderBottom: '1px solid #2a2a2a' }}>
+              <td style={{ padding: '6px 4px', color: '#ccc' }}>{g.nominal}</td>
+              <td style={{ padding: '6px 4px', color: '#eee', fontWeight: 600 }}>{g.type}</td>
+              <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{g.length.toFixed(2)}</td>
+              <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{g.count}</td>
+              <td style={{ padding: '6px 4px', textAlign: 'right', color: '#fff', fontWeight: 600 }}>
+                {(g.length * g.count).toFixed(2)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+const renderRoofCutList = (roofMembers: FramingMember[]) => {
+  const groups: {
+    [key: string]: {
+      nominal: string;
+      type: string;
+      length: number;
+      count: number;
+    }
+  } = {};
+
+  roofMembers.forEach((r) => {
+    const [w, h, d] = r.size;
+    const len = Math.max(w, h, d);
+    const nominal = d > 0.1 || r.type === 'rafter' || r.type === 'ridge'
+      ? '2x6 (40x140mm)'
+      : '2x4 (40x90mm)';
+
+    let typeLabel = r.type === 'ridge' ? 'Ridge Beam' : (r.type === 'rafter' ? 'Rafter' : 'Collar Tie');
+    if (r.id.includes('collar-tie')) {
+      typeLabel = 'Collar Tie';
+    }
+    const key = `${nominal}-${typeLabel}-${len.toFixed(3)}`;
+
+    if (!groups[key]) {
+      groups[key] = {
+        nominal,
+        type: typeLabel,
+        length: len,
+        count: 0,
+      };
+    }
+    groups[key].count++;
+  });
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid #333', color: '#888' }}>
+            <th style={{ padding: '6px 4px' }}>Nominal</th>
+            <th style={{ padding: '6px 4px' }}>Component</th>
+            <th style={{ padding: '6px 4px', textAlign: 'right' }}>Len (m)</th>
+            <th style={{ padding: '6px 4px', textAlign: 'right' }}>Qty</th>
+            <th style={{ padding: '6px 4px', textAlign: 'right' }}>Total (m)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.values(groups).map((g, idx) => (
+            <tr key={idx} style={{ borderBottom: '1px solid #2a2a2a' }}>
+              <td style={{ padding: '6px 4px', color: '#ccc' }}>{g.nominal}</td>
+              <td style={{ padding: '6px 4px', color: '#eee', fontWeight: 600 }}>{g.type}</td>
+              <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{g.length.toFixed(2)}</td>
+              <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{g.count}</td>
+              <td style={{ padding: '6px 4px', textAlign: 'right', color: '#fff', fontWeight: 600 }}>
+                {(g.length * g.count).toFixed(2)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};

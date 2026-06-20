@@ -6,6 +6,8 @@ export interface FramingMember {
   position: [number, number, number]; // Center in world coordinates [X, Y, Z]
   rotation: [number, number, number]; // Rotation angles [X, Y, Z] in radians
   size: [number, number, number];     // Size dimensions [width, height, depth]
+  floorId?: string;                   // Optional association to specific Floor
+  wallId?: string;                    // Optional association to specific Wall
 }
 
 export function generateFraming(state: ProjectState): FramingMember[] {
@@ -548,7 +550,6 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         rotation: [0, 0, angleRad],
         size: [slopeLength, rafterHeight, rafterThickness],
       });
-
       // Collar tie (horizontal bracing joist across rafters)
       if (i > 0 && i < rafterCount - 1) {
         const collarY = topElevation + 0.6; // 60cm above wall plates (shorter and higher up)
@@ -566,6 +567,25 @@ export function generateFraming(state: ProjectState): FramingMember[] {
       }
     }
   }
+
+  // Post-process to associate members with specific floors and walls for localized cut lists
+  members.forEach((member) => {
+    if (member.id.startsWith('floor-')) {
+      const match = member.id.match(/floor-.*?-(\d+)/) || member.id.match(/-(\d+)(?:-|$)/);
+      if (match) {
+        const level = parseInt(match[1], 10);
+        const floor = state.floors.find(f => f.level === level);
+        if (floor) {
+          member.floorId = floor.id;
+        }
+      }
+    } else if (member.id.startsWith('wall-')) {
+      const floorMatch = member.id.match(/(floor-\d+)/);
+      const wallMatch = member.id.match(/(wall-(?:front|back|left|right))/);
+      if (floorMatch) member.floorId = floorMatch[1];
+      if (wallMatch) member.wallId = wallMatch[1];
+    }
+  });
 
   return members;
 }
