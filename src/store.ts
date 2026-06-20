@@ -74,6 +74,7 @@ interface ProjectStore extends ProjectState {
   addSubObject: (wallId: string, type: 'window' | 'door' | 'opening') => void;
   removeSubObject: (wallId: string, subObjectId: string) => void;
   setFloorOpening: (floorId: string, opening: Floor['floorOpening'] | null) => void;
+  loadProject: (project: any) => void;
   resetProject: () => void;
 
   // Dragging actions
@@ -544,6 +545,17 @@ export const useProjectStore = create<ProjectStore>((set) => ({
           }
         };
       })
+    };
+  }),
+
+  loadProject: (project) => set((state) => {
+    if (!project || !project.dimensions || !project.floors) return {};
+    return {
+      buildingType: project.buildingType || state.buildingType,
+      dimensions: { ...state.dimensions, ...project.dimensions },
+      roof: { ...state.roof, ...project.roof },
+      floors: project.floors,
+      uiState: { ...state.uiState, selectedId: null, selectedType: null }
     };
   }),
 
