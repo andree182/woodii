@@ -73,6 +73,7 @@ interface ProjectStore extends ProjectState {
   updateSubObject: (wallId: string, subObjectId: string, updates: Partial<any>) => void;
   addSubObject: (wallId: string, type: 'window' | 'door' | 'opening') => void;
   removeSubObject: (wallId: string, subObjectId: string) => void;
+  setFloorOpening: (floorId: string, opening: Floor['floorOpening'] | null) => void;
   resetProject: () => void;
 
   // Dragging actions
@@ -154,9 +155,29 @@ export const useProjectStore = create<ProjectStore>((set) => ({
         return newWall;
       });
 
+      // Clamp floorOpening if it exists
+      let updatedOpening = floor.floorOpening;
+      if (updatedOpening) {
+        const oWidth = Math.max(0.5, Math.min(newDims.width - 0.4, updatedOpening.width));
+        const oDepth = Math.max(0.5, Math.min(newDims.depth - 0.4, updatedOpening.depth));
+        const minX = -newDims.width / 2 + oWidth / 2 + 0.2;
+        const maxX = newDims.width / 2 - oWidth / 2 - 0.2;
+        const minZ = -newDims.depth / 2 + oDepth / 2 + 0.2;
+        const maxZ = newDims.depth / 2 - oDepth / 2 - 0.2;
+        const oX = Math.max(minX, Math.min(maxX, updatedOpening.x));
+        const oZ = Math.max(minZ, Math.min(maxZ, updatedOpening.z));
+        updatedOpening = {
+          x: oX,
+          z: oZ,
+          width: oWidth,
+          depth: oDepth
+        };
+      }
+
       return {
         ...floor,
-        walls: updatedWalls
+        walls: updatedWalls,
+        floorOpening: updatedOpening
       };
     });
 
@@ -397,8 +418,28 @@ export const useProjectStore = create<ProjectStore>((set) => ({
           dimensions: newDims,
           floors: state.floors.map(floor => {
             const defaultWalls = createOuterWalls(newDims.width, newDims.depth, 0.15, floor.level);
+            
+            let updatedOpening = floor.floorOpening;
+            if (updatedOpening) {
+              const oWidth = Math.max(0.5, Math.min(newDims.width - 0.4, updatedOpening.width));
+              const oDepth = Math.max(0.5, Math.min(newDims.depth - 0.4, updatedOpening.depth));
+              const minX = -newDims.width / 2 + oWidth / 2 + 0.2;
+              const maxX = newDims.width / 2 - oWidth / 2 - 0.2;
+              const minZ = -newDims.depth / 2 + oDepth / 2 + 0.2;
+              const maxZ = newDims.depth / 2 - oDepth / 2 - 0.2;
+              const oX = Math.max(minX, Math.min(maxX, updatedOpening.x));
+              const oZ = Math.max(minZ, Math.min(maxZ, updatedOpening.z));
+              updatedOpening = {
+                x: oX,
+                z: oZ,
+                width: oWidth,
+                depth: oDepth
+              };
+            }
+
             return {
               ...floor,
+              floorOpening: updatedOpening,
               walls: defaultWalls.map(newWall => {
                 const matchingExisting = floor.walls.find(w => w.id === newWall.id);
                 if (matchingExisting) {
@@ -425,8 +466,28 @@ export const useProjectStore = create<ProjectStore>((set) => ({
           dimensions: newDims,
           floors: state.floors.map(floor => {
             const defaultWalls = createOuterWalls(newDims.width, newDims.depth, 0.15, floor.level);
+            
+            let updatedOpening = floor.floorOpening;
+            if (updatedOpening) {
+              const oWidth = Math.max(0.5, Math.min(newDims.width - 0.4, updatedOpening.width));
+              const oDepth = Math.max(0.5, Math.min(newDims.depth - 0.4, updatedOpening.depth));
+              const minX = -newDims.width / 2 + oWidth / 2 + 0.2;
+              const maxX = newDims.width / 2 - oWidth / 2 - 0.2;
+              const minZ = -newDims.depth / 2 + oDepth / 2 + 0.2;
+              const maxZ = newDims.depth / 2 - oDepth / 2 - 0.2;
+              const oX = Math.max(minX, Math.min(maxX, updatedOpening.x));
+              const oZ = Math.max(minZ, Math.min(maxZ, updatedOpening.z));
+              updatedOpening = {
+                x: oX,
+                z: oZ,
+                width: oWidth,
+                depth: oDepth
+              };
+            }
+
             return {
               ...floor,
+              floorOpening: updatedOpening,
               walls: defaultWalls.map(newWall => {
                 const matchingExisting = floor.walls.find(w => w.id === newWall.id);
                 if (matchingExisting) {
@@ -449,6 +510,41 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       }
     }
     return {};
+  }),
+
+  setFloorOpening: (floorId, opening) => set((state) => {
+    if (!opening) {
+      return {
+        floors: state.floors.map(f => f.id === floorId ? { ...f, floorOpening: undefined } : f)
+      };
+    }
+    
+    const { width, depth } = state.dimensions;
+    const oWidth = Math.max(0.5, Math.min(width - 0.4, opening.width));
+    const oDepth = Math.max(0.5, Math.min(depth - 0.4, opening.depth));
+    
+    const minX = -width / 2 + oWidth / 2 + 0.2;
+    const maxX = width / 2 - oWidth / 2 - 0.2;
+    const minZ = -depth / 2 + oDepth / 2 + 0.2;
+    const maxZ = depth / 2 - oDepth / 2 - 0.2;
+    
+    const oX = Math.max(minX, Math.min(maxX, opening.x));
+    const oZ = Math.max(minZ, Math.min(maxZ, opening.z));
+
+    return {
+      floors: state.floors.map(floor => {
+        if (floor.id !== floorId) return floor;
+        return {
+          ...floor,
+          floorOpening: {
+            x: oX,
+            z: oZ,
+            width: oWidth,
+            depth: oDepth
+          }
+        };
+      })
+    };
   }),
 
   resetProject: () => set(() => ({

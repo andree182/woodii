@@ -46,10 +46,39 @@ export default function BuildingRenderer() {
     const floorY = floor.level * heightPerFloor;
     const matProps = getMaterialProps(floor.id, 'floor', '#555555');
 
+    // Build the 2D Shape of the floor footprint (X-Z plane, drawn in local X-Y)
+    const floorShape = new Shape();
+    floorShape.moveTo(-width / 2, -depth / 2);
+    floorShape.lineTo(width / 2, -depth / 2);
+    floorShape.lineTo(width / 2, depth / 2);
+    floorShape.lineTo(-width / 2, depth / 2);
+    floorShape.closePath();
+
+    // Carve out a hole for the stairwell opening if it exists
+    if (floor.floorOpening) {
+      const opening = floor.floorOpening;
+      const xStart = opening.x - opening.width / 2;
+      const xEnd = opening.x + opening.width / 2;
+      const yStart = opening.z - opening.depth / 2;
+      const yEnd = opening.z + opening.depth / 2;
+
+      const holePath = new Path();
+      // Clockwise drawing to subtract from CCW floorShape
+      holePath.moveTo(xStart, yStart);
+      holePath.lineTo(xStart, yEnd);
+      holePath.lineTo(xEnd, yEnd);
+      holePath.lineTo(xEnd, yStart);
+      holePath.closePath();
+      
+      floorShape.holes.push(holePath);
+    }
+
     return (
       <group key={floor.id}>
+        {/* Floor Slab */}
         <mesh
-          position={[0, floorY - 0.075, 0]}
+          position={[0, floorY, 0]}
+          rotation={[-Math.PI / 2, 0, 0]}
           castShadow
           receiveShadow
           onClick={(e) => {
@@ -57,9 +86,38 @@ export default function BuildingRenderer() {
             selectObject(floor.id, 'floor');
           }}
         >
-          <boxGeometry args={[width, 0.15, depth]} />
+          <extrudeGeometry args={[floorShape, { depth: 0.15, bevelEnabled: false }]} />
           <meshStandardMaterial {...matProps} roughness={0.8} />
         </mesh>
+
+        {/* Staircase leading up to the opening from the floor below */}
+        {floor.level > 0 && floor.floorOpening && (() => {
+          const opening = floor.floorOpening;
+          const numSteps = 12;
+          const stepHeight = heightPerFloor / numSteps;
+          const stepDepth = opening.depth / numSteps;
+          const steps = [];
+          
+          for (let i = 0; i < numSteps; i++) {
+            // Steps start at floor level below and lead up to current floor level
+            const stepY = (floor.level - 1) * heightPerFloor + i * stepHeight + stepHeight / 2;
+            const stepZ = opening.z - opening.depth / 2 + i * stepDepth + stepDepth / 2;
+            const stepX = opening.x;
+            
+            steps.push(
+              <mesh
+                key={`step-${floor.id}-${i}`}
+                position={[stepX, stepY, stepZ]}
+                castShadow
+                receiveShadow
+              >
+                <boxGeometry args={[opening.width - 0.05, 0.04, stepDepth]} />
+                <meshStandardMaterial color="#8b5a2b" roughness={0.9} />
+              </mesh>
+            );
+          }
+          return <group>{steps}</group>;
+        })()}
       </group>
     );
   };

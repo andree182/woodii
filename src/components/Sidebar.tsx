@@ -18,6 +18,7 @@ export default function Sidebar() {
     addSubObject,
     removeSubObject,
     updateSubObject,
+    setFloorOpening,
     resetProject,
   } = useProjectStore();
 
@@ -489,12 +490,137 @@ export default function Sidebar() {
                 </div>
               )}
 
-              {selectedType === 'floor' && (
-                <div style={{ fontSize: '12px', color: '#aaa', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <div>Selected Floor Elevation: <strong style={{ color: '#fff' }}>{(floors.find(f => f.id === selectedId)?.level || 0) * dimensions.heightPerFloor}m</strong></div>
-                  <div>Walls count: <strong style={{ color: '#fff' }}>{(floors.find(f => f.id === selectedId)?.walls.length || 0)}</strong></div>
-                </div>
-              )}
+              {selectedType === 'floor' && (() => {
+                const floor = floors.find(f => f.id === selectedId);
+                if (!floor) return null;
+                const opening = floor.floorOpening;
+                return (
+                  <div style={{ fontSize: '12px', color: '#aaa', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div>Selected Floor Elevation: <strong style={{ color: '#fff' }}>{floor.level * dimensions.heightPerFloor}m</strong></div>
+                    <div>Walls count: <strong style={{ color: '#fff' }}>{floor.walls.length}</strong></div>
+                    
+                    <div style={{ borderTop: '1px solid #333', paddingTop: '10px', marginTop: '4px' }}>
+                      <h4 style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#ff8c00', textTransform: 'uppercase' }}>Floor Opening (Stairwell)</h4>
+                      
+                      {!opening ? (
+                        <button
+                          onClick={() => setFloorOpening(floor.id, { x: 0, z: 0, width: 1.0, depth: 1.5 })}
+                          style={{
+                            width: '100%',
+                            padding: '6px',
+                            backgroundColor: '#ff8c00',
+                            color: '#000',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          + Add Stairwell Opening
+                        </button>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Width (m)</label>
+                              <input
+                                type="number"
+                                step="0.05"
+                                value={opening.width}
+                                onChange={(e) => setFloorOpening(floor.id, { ...opening, width: parseFloat(e.target.value) })}
+                                style={{
+                                  width: '100%',
+                                  padding: '5px',
+                                  backgroundColor: '#121212',
+                                  border: '1px solid #333',
+                                  borderRadius: '4px',
+                                  color: '#e0e0e0',
+                                  fontSize: '11px'
+                                }}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Depth (m)</label>
+                              <input
+                                type="number"
+                                step="0.05"
+                                value={opening.depth}
+                                onChange={(e) => setFloorOpening(floor.id, { ...opening, depth: parseFloat(e.target.value) })}
+                                style={{
+                                  width: '100%',
+                                  padding: '5px',
+                                  backgroundColor: '#121212',
+                                  border: '1px solid #333',
+                                  borderRadius: '4px',
+                                  color: '#e0e0e0',
+                                  fontSize: '11px'
+                                }}
+                              />
+                            </div>
+                          </div>
+                          
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Position X (m)</label>
+                              <input
+                                type="number"
+                                step="0.05"
+                                value={opening.x}
+                                onChange={(e) => setFloorOpening(floor.id, { ...opening, x: parseFloat(e.target.value) })}
+                                style={{
+                                  width: '100%',
+                                  padding: '5px',
+                                  backgroundColor: '#121212',
+                                  border: '1px solid #333',
+                                  borderRadius: '4px',
+                                  color: '#e0e0e0',
+                                  fontSize: '11px'
+                                }}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Position Z (m)</label>
+                              <input
+                                type="number"
+                                step="0.05"
+                                value={opening.z}
+                                onChange={(e) => setFloorOpening(floor.id, { ...opening, z: parseFloat(e.target.value) })}
+                                style={{
+                                  width: '100%',
+                                  padding: '5px',
+                                  backgroundColor: '#121212',
+                                  border: '1px solid #333',
+                                  borderRadius: '4px',
+                                  color: '#e0e0e0',
+                                  fontSize: '11px'
+                                }}
+                              />
+                            </div>
+                          </div>
+                          
+                          <button
+                            onClick={() => setFloorOpening(floor.id, null)}
+                            style={{
+                              marginTop: '4px',
+                              padding: '5px',
+                              backgroundColor: '#c62828',
+                              color: '#fff',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Remove Opening
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </section>
