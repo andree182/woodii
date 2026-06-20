@@ -616,23 +616,51 @@ export default function Sidebar() {
                     <div>Overhang: <strong style={{ color: '#fff' }}>{roof.overhang}m</strong></div>
                     <div>Thickness: <strong style={{ color: '#fff' }}>{roof.thickness}m</strong></div>
                   </div>
-                )}
-
-                {selectedType === 'floor' && (() => {
-                  const floor = floors.find(f => f.id === selectedId);
+                )}                {selectedType === 'floor' && (() => {
+                  const isRoofFloor = selectedId === 'floor-roof';
+                  const floor = isRoofFloor
+                    ? { id: 'floor-roof', level: floors.length, walls: [], floorOpening: roof.roofOpening }
+                    : floors.find(f => f.id === selectedId);
+                  
                   if (!floor) return null;
                   const opening = floor.floorOpening;
+
+                  const updateOpening = (newOpening: typeof opening | null) => {
+                    if (isRoofFloor) {
+                      if (!newOpening) {
+                        setRoofConfig({ roofOpening: undefined });
+                      } else {
+                        const oWidth = Math.max(0.5, Math.min(dimensions.width - 0.4, newOpening.width));
+                        const oDepth = Math.max(0.5, Math.min(dimensions.depth - 0.4, newOpening.depth));
+                        const minX = -dimensions.width / 2 + oWidth / 2 + 0.2;
+                        const maxX = dimensions.width / 2 - oWidth / 2 - 0.2;
+                        const minZ = -dimensions.depth / 2 + oDepth / 2 + 0.2;
+                        const maxZ = dimensions.depth / 2 - oDepth / 2 - 0.2;
+                        const oX = Math.max(minX, Math.min(maxX, newOpening.x));
+                        const oZ = Math.max(minZ, Math.min(maxZ, newOpening.z));
+                        setRoofConfig({
+                          roofOpening: { x: oX, z: oZ, width: oWidth, depth: oDepth }
+                        });
+                      }
+                    } else {
+                      setFloorOpening(floor.id, newOpening);
+                    }
+                  };
+
                   return (
                     <div style={{ fontSize: '12px', color: '#aaa', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div>Selected Floor: <strong style={{ color: '#fff' }}>{isRoofFloor ? 'Attic / Roof Floor' : `Floor ${floor.level}`}</strong></div>
                       <div>Selected Floor Elevation: <strong style={{ color: '#fff' }}>{floor.level * dimensions.heightPerFloor}m</strong></div>
-                      <div>Walls count: <strong style={{ color: '#fff' }}>{floor.walls.length}</strong></div>
+                      {!isRoofFloor && <div>Walls count: <strong style={{ color: '#fff' }}>{floor.walls.length}</strong></div>}
                       
                       <div style={{ borderTop: '1px solid #333', paddingTop: '10px', marginTop: '4px' }}>
-                        <h4 style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#ff8c00', textTransform: 'uppercase' }}>Floor Opening (Stairwell)</h4>
+                        <h4 style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#ff8c00', textTransform: 'uppercase' }}>
+                          {isRoofFloor ? 'Attic Hatch / Opening' : 'Floor Opening (Stairwell)'}
+                        </h4>
                         
                         {!opening ? (
                           <button
-                            onClick={() => setFloorOpening(floor.id, { x: 0, z: 0, width: 1.0, depth: 1.5 })}
+                            onClick={() => updateOpening({ x: 0, z: 0, width: 1.0, depth: 1.5 })}
                             style={{
                               width: '100%',
                               padding: '6px',
@@ -645,7 +673,7 @@ export default function Sidebar() {
                               cursor: 'pointer'
                             }}
                           >
-                            + Add Stairwell Opening
+                            + Add Opening
                           </button>
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -656,7 +684,7 @@ export default function Sidebar() {
                                   type="number"
                                   step="0.05"
                                   value={opening.width}
-                                  onChange={(e) => setFloorOpening(floor.id, { ...opening, width: parseFloat(e.target.value) })}
+                                  onChange={(e) => updateOpening({ ...opening, width: parseFloat(e.target.value) })}
                                   style={{
                                     width: '100%',
                                     padding: '5px',
@@ -674,7 +702,7 @@ export default function Sidebar() {
                                   type="number"
                                   step="0.05"
                                   value={opening.depth}
-                                  onChange={(e) => setFloorOpening(floor.id, { ...opening, depth: parseFloat(e.target.value) })}
+                                  onChange={(e) => updateOpening({ ...opening, depth: parseFloat(e.target.value) })}
                                   style={{
                                     width: '100%',
                                     padding: '5px',
@@ -695,7 +723,7 @@ export default function Sidebar() {
                                   type="number"
                                   step="0.05"
                                   value={opening.x}
-                                  onChange={(e) => setFloorOpening(floor.id, { ...opening, x: parseFloat(e.target.value) })}
+                                  onChange={(e) => updateOpening({ ...opening, x: parseFloat(e.target.value) })}
                                   style={{
                                     width: '100%',
                                     padding: '5px',
@@ -713,7 +741,7 @@ export default function Sidebar() {
                                   type="number"
                                   step="0.05"
                                   value={opening.z}
-                                  onChange={(e) => setFloorOpening(floor.id, { ...opening, z: parseFloat(e.target.value) })}
+                                  onChange={(e) => updateOpening({ ...opening, z: parseFloat(e.target.value) })}
                                   style={{
                                     width: '100%',
                                     padding: '5px',
@@ -728,7 +756,7 @@ export default function Sidebar() {
                             </div>
                             
                             <button
-                              onClick={() => setFloorOpening(floor.id, null)}
+                              onClick={() => updateOpening(null)}
                               style={{
                                 marginTop: '4px',
                                 padding: '5px',

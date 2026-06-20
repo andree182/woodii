@@ -19,25 +19,29 @@ export function generateFraming(state: ProjectState): FramingMember[] {
   // ----------------------------------------------------
   // 1. FLOOR JOISTS GENERATION (For each floor)
   // ----------------------------------------------------
-  state.floors.forEach((floor) => {
-    const floorY = floor.level * heightPerFloor;
+  for (let level = 0; level <= totalFloors; level++) {
+    const floorY = level * heightPerFloor;
     const joistHeight = 0.14; // 2x6 floor joists
     const joistThickness = 0.04;
     
+    // Find the floor at this level (or the top-most floor if level = totalFloors)
+    const floor = state.floors.find(f => f.level === level) || state.floors[state.floors.length - 1];
+    if (!floor) continue;
+
     const wallThickness = floor.walls[0]?.thickness || 0.15;
     const outerW = width + wallThickness * 0.70;
     const outerD = depth + wallThickness * 0.70;
 
     // Front and Back Rim Joists
     members.push({
-      id: `floor-rim-front-${floor.level}`,
+      id: `floor-rim-front-${level}`,
       type: 'joist',
       position: [0, floorY - joistHeight / 2, outerD / 2 - joistThickness / 2],
       rotation: [0, 0, 0],
       size: [outerW, joistHeight, joistThickness],
     });
     members.push({
-      id: `floor-rim-back-${floor.level}`,
+      id: `floor-rim-back-${level}`,
       type: 'joist',
       position: [0, floorY - joistHeight / 2, -outerD / 2 + joistThickness / 2],
       rotation: [0, 0, 0],
@@ -47,17 +51,19 @@ export function generateFraming(state: ProjectState): FramingMember[] {
     // Regular floor joists running along Z (depth)
     const joistSpacing = 0.4; // 40cm spacing
     const halfWidth = outerW / 2;
-    const joistCount = Math.floor(outerW / joistSpacing) + 1;
+    
+    // Space the joists symmetrically and flush with the outer left and right faces of the floor slab
+    const spacingWidth = outerW - joistThickness;
+    const numSpaces = Math.max(1, Math.ceil(spacingWidth / joistSpacing));
+    const actualSpacing = spacingWidth / numSpaces;
+    const joistCount = numSpaces + 1;
+
+    const opening = level === totalFloors ? state.roof.roofOpening : floor.floorOpening;
 
     for (let i = 0; i < joistCount; i++) {
-      const joistX = -halfWidth + i * joistSpacing;
-      // Skip very edge joists if they clash with rim joists (handled by outer rim)
-      if (Math.abs(joistX - halfWidth) < 0.02 || Math.abs(joistX + halfWidth) < 0.02) {
-        // Just place them slightly inset if needed, or skip
-      }
+      const joistX = -halfWidth + joistThickness / 2 + i * actualSpacing;
 
       // Check if this joist intersects with the floor opening (stairwell)
-      const opening = floor.floorOpening;
       if (opening && joistX > (opening.x - opening.width / 2 - 0.02) && joistX < (opening.x + opening.width / 2 + 0.02)) {
         // Cut the joist: render front and back segments
         const zStartOpening = opening.z - opening.depth / 2;
@@ -67,7 +73,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         const frontLength = (outerD / 2 - joistThickness) - zEndOpening;
         if (frontLength > 0.1) {
           members.push({
-            id: `floor-joist-${floor.level}-${i}-front`,
+            id: `floor-joist-${level}-${i}-front`,
             type: 'joist',
             position: [joistX, floorY - joistHeight / 2, zEndOpening + frontLength / 2],
             rotation: [0, 0, 0],
@@ -79,7 +85,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         const backLength = zStartOpening - (-outerD / 2 + joistThickness);
         if (backLength > 0.1) {
           members.push({
-            id: `floor-joist-${floor.level}-${i}-back`,
+            id: `floor-joist-${level}-${i}-back`,
             type: 'joist',
             position: [joistX, floorY - joistHeight / 2, -outerD / 2 + joistThickness + backLength / 2],
             rotation: [0, 0, 0],
@@ -89,7 +95,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
       } else {
         // Regular uncut joist
         members.push({
-          id: `floor-joist-${floor.level}-${i}`,
+          id: `floor-joist-${level}-${i}`,
           type: 'joist',
           position: [joistX, floorY - joistHeight / 2, 0],
           rotation: [0, 0, 0],
@@ -99,14 +105,13 @@ export function generateFraming(state: ProjectState): FramingMember[] {
     }
 
     // Floor Opening Headers
-    if (floor.floorOpening) {
-      const opening = floor.floorOpening;
+    if (opening) {
       const zStartOpening = opening.z - opening.depth / 2;
       const zEndOpening = opening.z + opening.depth / 2;
       
       // Header at front of opening
       members.push({
-        id: `floor-header-front-${floor.level}`,
+        id: `floor-header-front-${level}`,
         type: 'header',
         position: [opening.x, floorY - joistHeight / 2, zEndOpening - joistThickness / 2],
         rotation: [0, 0, 0],
@@ -114,14 +119,14 @@ export function generateFraming(state: ProjectState): FramingMember[] {
       });
       // Header at back of opening
       members.push({
-        id: `floor-header-back-${floor.level}`,
+        id: `floor-header-back-${level}`,
         type: 'header',
         position: [opening.x, floorY - joistHeight / 2, zStartOpening + joistThickness / 2],
         rotation: [0, 0, 0],
         size: [opening.width, joistHeight, joistThickness],
       });
     }
-  });
+  }
 
   // ----------------------------------------------------
   // 2. WALL FRAMING GENERATION (For each wall & floor)
@@ -409,13 +414,17 @@ export function generateFraming(state: ProjectState): FramingMember[] {
   if (type === 'flat') {
     // Flat roof joists/rafters sloping along inclination
     const rafterSpacing = 0.6;
-    const rafterCount = Math.floor(depth / rafterSpacing) + 1;
     const rafterThickness = 0.04;
     const rafterHeight = 0.14; // 2x6 rafters
     const rafterLength = (width + wallThickness) / Math.cos(angleRad) + overhang * 2;
 
+    const spanningWidth = depth + overhang * 2 - rafterThickness;
+    const numSpaces = Math.max(1, Math.ceil(spanningWidth / rafterSpacing));
+    const actualSpacing = spanningWidth / numSpaces;
+    const rafterCount = numSpaces + 1;
+
     for (let i = 0; i < rafterCount; i++) {
-      const rz = -depth / 2 + i * rafterSpacing;
+      const rz = -depth / 2 - overhang + rafterThickness / 2 + i * actualSpacing;
       // Slanted rafters centered at X=0, sloping around Z-axis rotation
       members.push({
         id: `roof-rafter-flat-${i}`,
@@ -428,7 +437,6 @@ export function generateFraming(state: ProjectState): FramingMember[] {
   } else {
     // Saddle roof trusses running along depth Z
     const rafterSpacing = 0.6;
-    const rafterCount = Math.floor((depth + overhang * 2) / rafterSpacing) + 1;
     const rafterThickness = 0.04;
     const rafterHeight = 0.14; // 2x6 rafters
     
@@ -448,8 +456,13 @@ export function generateFraming(state: ProjectState): FramingMember[] {
     const halfRoofWidth = halfGableWidth + overhang;
     const slopeLength = halfRoofWidth / Math.cos(angleRad);
 
+    const spanningWidth = depth + overhang * 2 - rafterThickness;
+    const numSpaces = Math.max(1, Math.ceil(spanningWidth / rafterSpacing));
+    const actualSpacing = spanningWidth / numSpaces;
+    const rafterCount = numSpaces + 1;
+
     for (let i = 0; i < rafterCount; i++) {
-      const rz = -depth / 2 - overhang + i * rafterSpacing;
+      const rz = -depth / 2 - overhang + rafterThickness / 2 + i * actualSpacing;
 
       // Right slope rafters
       const rightX = halfRoofWidth / 2;
@@ -475,8 +488,11 @@ export function generateFraming(state: ProjectState): FramingMember[] {
 
       // Collar tie (horizontal bracing joist across rafters)
       if (i > 0 && i < rafterCount - 1) {
-        const collarY = topElevation + 0.3; // 30cm above wall plates
-        const collarWidth = width;
+        const collarY = topElevation + 0.6; // 60cm above wall plates (shorter and higher up)
+        const yOffset = collarY - topElevation;
+        const maxWidth = 2 * (halfGableWidth - yOffset / Math.tan(angleRad) - rafterHeight / Math.cos(angleRad));
+        const collarWidth = Math.max(0.5, maxWidth - 0.02);
+
         members.push({
           id: `roof-collar-tie-${i}`,
           type: 'joist',

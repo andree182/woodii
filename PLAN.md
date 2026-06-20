@@ -37,3 +37,8 @@ We are designing together a web F/three.js/jsx (using vite to build) application
   * The sub-objects can be selected, and moved on the wall by dragging (horizontally, and also vertically for windows/openings) - or their properties can be adjusted (color, dimensions, elevation).
   * Allow 'see through' with shown construction items
   * Allow 'see through' for different floors, and to see behind outer walls
+
+* Advanced Construction Rules:
+  * Symmetrical and flush alignment of outer floor joists (rim joists) and roof rafters to cover the exact floor/roof dimensions without offset skew.
+  * Dynamic width calculation of saddle roof collar ties based on their elevation to sit flush inside the sloped rafters and avoid outer protrusion.
+  * Configurable ceiling/attic floor slab (roof of the top floor) rendered below the roof with custom openings (for attic access, chimneys, etc.).

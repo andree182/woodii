@@ -668,6 +668,14 @@ export default function BuildingRenderer() {
     }
   };
 
+  const getMemberLevel = (id: string): number => {
+    const wallFloorMatch = id.match(/floor-(\d+)/);
+    if (wallFloorMatch) return parseInt(wallFloorMatch[1]);
+    const floorMatch = id.match(/floor-(?:rim-front-|rim-back-|header-front-|header-back-|joist-)?(\d+)/);
+    if (floorMatch) return parseInt(floorMatch[1]);
+    return -1;
+  };
+
   // Hide components if single floor view is active and we are on a higher floor
   const visibleFloors = uiState.currentFloorView === -1
     ? floors
@@ -683,8 +691,59 @@ export default function BuildingRenderer() {
         </group>
       ))}
 
+      {/* Ceiling Floor Slab (Attic floor / floor of roof) */}
+      {(uiState.currentFloorView === -1 || uiState.currentFloorView === totalFloors) && (() => {
+        const matProps = getMaterialProps('floor-roof', 'floor', '#666666');
+        const wallThickness = floors[0]?.walls[0]?.thickness || 0.15;
+        const outerW = width + wallThickness * 0.70;
+        const outerD = depth + wallThickness * 0.70;
+
+        const ceilingShape = new Shape();
+        ceilingShape.moveTo(-outerW / 2, -outerD / 2);
+        ceilingShape.lineTo(outerW / 2, -outerD / 2);
+        ceilingShape.lineTo(outerW / 2, outerD / 2);
+        ceilingShape.lineTo(-outerW / 2, outerD / 2);
+        ceilingShape.closePath();
+
+        if (roof.roofOpening) {
+          const opening = roof.roofOpening;
+          const xStart = opening.x - opening.width / 2;
+          const xEnd = opening.x + opening.width / 2;
+          const yStart = opening.z - opening.depth / 2;
+          const yEnd = opening.z + opening.depth / 2;
+
+          const holePath = new Path();
+          holePath.moveTo(xStart, yStart);
+          holePath.lineTo(xStart, yEnd);
+          holePath.lineTo(xEnd, yEnd);
+          holePath.lineTo(xEnd, yStart);
+          holePath.closePath();
+          ceilingShape.holes.push(holePath);
+        }
+
+        return (
+          <group key="floor-roof-group">
+            {uiState.seeThroughMode !== 'studsOnly' && (
+              <mesh
+                position={[0, topElevation, 0]}
+                rotation={[-Math.PI / 2, 0, 0]}
+                castShadow
+                receiveShadow
+                onClick={(e) => {
+                  e.stopPropagation();
+                  selectObject('floor-roof', 'floor');
+                }}
+              >
+                <extrudeGeometry args={[ceilingShape, { depth: 0.15, bevelEnabled: false }]} />
+                <meshStandardMaterial {...matProps} roughness={0.8} />
+              </mesh>
+            )}
+          </group>
+        );
+      })()}
+
       {/* Roof: only render if we are viewing all floors or the highest floor */}
-      {(uiState.currentFloorView === -1 || uiState.currentFloorView === totalFloors - 1) && renderRoof()}
+      {(uiState.currentFloorView === -1 || uiState.currentFloorView === totalFloors - 1 || uiState.currentFloorView === totalFloors) && renderRoof()}
 
       {/* 2x4 Framing Layer: render in studsOnly and seeThrough modes */}
       {uiState.seeThroughMode !== 'solid' && (() => {
@@ -695,16 +754,11 @@ export default function BuildingRenderer() {
           <group>
             {framingMembers.map((member) => {
               if (uiState.currentFloorView !== -1) {
-                const isFloorMember = member.id.includes(`floor-${uiState.currentFloorView}`) || 
-                                      member.id.includes(`-floor-${uiState.currentFloorView}`) ||
-                                      (member.type === 'joist' && member.id.endsWith(`-${uiState.currentFloorView}`));
-                
-                const isWallMember = member.id.includes(`floor-${uiState.currentFloorView}`);
-                
-                const isRoofMember = member.type === 'rafter' || member.type === 'ridge';
-                const isTopFloorView = uiState.currentFloorView === totalFloors - 1;
+                const memberLevel = getMemberLevel(member.id);
+                const isRoofMember = member.type === 'rafter' || member.type === 'ridge' || member.id.includes('roof-');
+                const isTopFloorView = uiState.currentFloorView === totalFloors - 1 || uiState.currentFloorView === totalFloors;
 
-                if (!isFloorMember && !isWallMember && !(isRoofMember && isTopFloorView)) {
+                if (memberLevel !== uiState.currentFloorView && !(isRoofMember && isTopFloorView)) {
                   return null;
                 }
               }
@@ -718,8 +772,14 @@ export default function BuildingRenderer() {
               const isSelected = uiState.selectedId && (
                 uiState.selectedId === member.id || 
                 (wallMatch && uiState.selectedId === wallMatch[1]) ||
-                (member.id.includes('roof') && uiState.selectedId === 'roof') ||
-                (member.id.includes('floor-') && uiState.selectedId === `floor-${member.id.match(/floor-.*?-(\d+)/)?.[1]}`)
+                (member.id.includes('roof') && !member.id.includes('floor-roof') && uiState.selectedId === 'roof') ||
+                (() => {
+                  const memberLevel = getMemberLevel(member.id);
+                  if (memberLevel !== -1) {
+                    return uiState.selectedId === (memberLevel === totalFloors ? 'floor-roof' : `floor-${memberLevel}`);
+                  }
+                  return false;
+                })()
               );
               
               const memberColor = isSelected ? '#ff8c00' : woodColor;
@@ -728,12 +788,16 @@ export default function BuildingRenderer() {
                 e.stopPropagation();
                 if (wallMatch) {
                   selectObject(wallMatch[1], 'wall');
-                } else if (member.id.includes('roof')) {
+                } else if (member.id.includes('roof') && !member.id.includes('floor-roof')) {
                   selectObject('roof', 'roof');
                 } else {
-                  const fMatch = member.id.match(/floor-.*?-(\d+)/) || member.id.match(/floor-joist-(\d+)/) || member.id.match(/floor-opening-.*?-\d+-(\d+)/);
-                  if (fMatch) {
-                    selectObject(`floor-${fMatch[1]}`, 'floor');
+                  const memberLevel = getMemberLevel(member.id);
+                  if (memberLevel !== -1) {
+                    if (memberLevel === totalFloors) {
+                      selectObject('floor-roof', 'floor');
+                    } else {
+                      selectObject(`floor-${memberLevel}`, 'floor');
+                    }
                   }
                 }
               };

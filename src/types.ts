@@ -42,6 +42,12 @@ export interface RoofConfig {
   overhang: number;    // overhang past the walls in meters
   thickness: number;   // thickness of roof layers in meters
   constructionWidth: number; // beam width (e.g. 0.1m)
+  roofOpening?: {
+    x: number;
+    z: number;
+    width: number;
+    depth: number;
+  };
 }
 
 export interface UIState {

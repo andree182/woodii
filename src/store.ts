@@ -182,9 +182,28 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       };
     });
 
+    let updatedRoofOpening = state.roof.roofOpening;
+    if (updatedRoofOpening) {
+      const oWidth = Math.max(0.5, Math.min(newDims.width - 0.4, updatedRoofOpening.width));
+      const oDepth = Math.max(0.5, Math.min(newDims.depth - 0.4, updatedRoofOpening.depth));
+      const minX = -newDims.width / 2 + oWidth / 2 + 0.2;
+      const maxX = newDims.width / 2 - oWidth / 2 - 0.2;
+      const minZ = -newDims.depth / 2 + oDepth / 2 + 0.2;
+      const maxZ = newDims.depth / 2 - oDepth / 2 - 0.2;
+      const oX = Math.max(minX, Math.min(maxX, updatedRoofOpening.x));
+      const oZ = Math.max(minZ, Math.min(maxZ, updatedRoofOpening.z));
+      updatedRoofOpening = {
+        x: oX,
+        z: oZ,
+        width: oWidth,
+        depth: oDepth
+      };
+    }
+
     return {
       dimensions: newDims,
-      floors: newFloors
+      floors: newFloors,
+      roof: { ...state.roof, roofOpening: updatedRoofOpening }
     };
   }),
 
