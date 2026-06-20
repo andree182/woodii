@@ -10,23 +10,8 @@ export interface FramingMember {
   wallId?: string;                    // Optional association to specific Wall
 }
 
-export const getWallLayers = (wall: any) => {
-  if (wall.layerThicknesses) {
-    return {
-      outer: wall.layerThicknesses.outer,
-      middle: wall.layerThicknesses.middle,
-      inner: wall.layerThicknesses.inner,
-    };
-  }
-  const T = wall.thickness ?? 0.15;
-  if (Math.abs(T - 0.15) < 0.001) {
-    return { outer: 0.02, middle: 0.10, inner: 0.03 };
-  }
-  return {
-    outer: T * 0.15,
-    middle: T * 0.70,
-    inner: T * 0.15,
-  };
+export const getWallLayers = (state: ProjectState) => {
+  return state.wallLayers ?? { outer: 0.02, middle: 0.10, inner: 0.03 };
 };
 
 export function generateFraming(state: ProjectState): FramingMember[] {
@@ -40,8 +25,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
   if (state.foundation && state.foundation.type === 'screws') {
     const floor = state.floors[0];
     if (floor) {
-      const firstWall = floor.walls[0] || { thickness: 0.15 };
-      const { outer, middle, inner } = getWallLayers(firstWall);
+      const { outer, middle, inner } = getWallLayers(state);
       const T_total = outer + middle + inner;
       const outerW = width + T_total - 2 * outer;
       const outerD = depth + T_total - 2 * outer;
@@ -87,8 +71,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
     const floor = state.floors.find(f => f.level === level) || state.floors[state.floors.length - 1];
     if (!floor) continue;
 
-    const firstWall = floor.walls[0] || { thickness: 0.15 };
-    const { outer, middle, inner } = getWallLayers(firstWall);
+    const { outer, middle, inner } = getWallLayers(state);
     const T_total = outer + middle + inner;
     const outerW = width + T_total - 2 * outer;
     const outerD = depth + T_total - 2 * outer;
@@ -208,7 +191,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
       const length = Math.sqrt(dx * dx + dz * dz);
       const rotationY = -Math.atan2(dz, dx);
 
-      const { outer, middle, inner } = getWallLayers(wall);
+      const { outer, middle, inner } = getWallLayers(state);
       const wallLz = (inner - outer) / 2;
 
       // Determine heights

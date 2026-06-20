@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ProjectState, BuildingType, Dimensions, RoofConfig, FoundationConfig, UIState, Floor, Wall, SubObject } from './types';
+import { ProjectState, BuildingType, Dimensions, RoofConfig, FoundationConfig, WallLayersConfig, UIState, Floor, Wall, SubObject } from './types';
 
 // Helper to create default walls based on dimensions
 export const createOuterWalls = (width: number, depth: number, thickness = 0.15, level = 0): Wall[] => {
@@ -121,7 +121,7 @@ interface ProjectStore extends ProjectState {
   addSubObject: (wallId: string, type: 'window' | 'door' | 'opening') => void;
   removeSubObject: (wallId: string, subObjectId: string) => void;
   setFloorOpening: (floorId: string, opening: Floor['floorOpening'] | null) => void;
-  setWallLayerThicknesses: (wallKey: string, outer: number, middle: number, inner: number) => void;
+  setWallLayers: (layers: Partial<WallLayersConfig>) => void;
   loadProject: (project: any) => void;
   resetProject: () => void;
 
@@ -147,6 +147,11 @@ const INITIAL_PROJECT_STATE = {
   },
   foundation: {
     type: 'slab' as const,
+  },
+  wallLayers: {
+    outer: 0.02,
+    middle: 0.10,
+    inner: 0.03,
   },
   uiState: {
     selectedId: null,
@@ -336,10 +341,11 @@ export const useProjectStore = create<ProjectStore>((set) => ({
 
   addFloor: () => set((state) => {
     const nextLevel = state.floors.length;
+    const T = state.wallLayers.outer + state.wallLayers.middle + state.wallLayers.inner;
     const newFloor: Floor = {
       id: `floor-${nextLevel}`,
       level: nextLevel,
-      walls: createOuterWalls(state.dimensions.width, state.dimensions.depth, 0.15, nextLevel),
+      walls: createOuterWalls(state.dimensions.width, state.dimensions.depth, T, nextLevel),
     };
     return {
       floors: [...state.floors, newFloor]
@@ -996,23 +1002,16 @@ export const useProjectStore = create<ProjectStore>((set) => ({
     };
   }),
 
-  setWallLayerThicknesses: (wallKey, outer, middle, inner) => set((state) => {
-    const parts = wallKey.split('-');
-    const floorId = `${parts[0]}-${parts[1]}`;
-    const wallId = parts.slice(2).join('-');
+  setWallLayers: (layers) => set((state) => {
+    const newLayers = { ...state.wallLayers, ...layers };
+    const T = newLayers.outer + newLayers.middle + newLayers.inner;
 
     const updatedFloors = state.floors.map((floor) => {
-      if (floor.id !== floorId) return floor;
-
-      // Update the target wall first
-      const updatedWalls = floor.walls.map((wall) => {
-        if (wall.id !== wallId) return wall;
-        return {
-          ...wall,
-          thickness: outer + middle + inner,
-          layerThicknesses: { outer, middle, inner },
-        };
-      });
+      // Update all walls on this floor to have the new overall thickness
+      const updatedWalls = floor.walls.map((wall) => ({
+        ...wall,
+        thickness: T,
+      }));
 
       // Recalculate coordinates for all walls on this floor
       const relocatedWalls = recalculateWallCoordinates(
@@ -1054,7 +1053,10 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       };
     });
 
-    return { floors: updatedFloors };
+    return {
+      wallLayers: newLayers,
+      floors: updatedFloors,
+    };
   }),
 
   loadProject: (project) => set((state) => {
@@ -1064,6 +1066,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       dimensions: { ...state.dimensions, ...project.dimensions },
       roof: { ...state.roof, ...project.roof },
       foundation: project.foundation || state.foundation,
+      wallLayers: project.wallLayers || state.wallLayers,
       floors: project.floors,
       uiState: { ...state.uiState, selectedId: null, selectedType: null }
     };

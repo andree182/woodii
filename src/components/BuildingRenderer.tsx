@@ -1,7 +1,7 @@
 import { DoubleSide, FrontSide, Side, Shape, Path, Plane, Vector3 } from 'three';
 import { useProjectStore } from '../store';
 import { Wall, Floor } from '../types';
-import { generateFraming, getWallLayers } from '../utils/framingEngine';
+import { generateFraming } from '../utils/framingEngine';
 
 export default function BuildingRenderer() {
   const dimensions = useProjectStore((state) => state.dimensions);
@@ -9,6 +9,7 @@ export default function BuildingRenderer() {
   const roof = useProjectStore((state) => state.roof);
   const uiState = useProjectStore((state) => state.uiState);
   const foundation = useProjectStore((state) => state.foundation);
+  const wallLayers = useProjectStore((state) => state.wallLayers);
   const selectObject = useProjectStore((state) => state.selectObject);
   const startDragging = useProjectStore((state) => state.startDragging);
   const stopDragging = useProjectStore((state) => state.stopDragging);
@@ -231,7 +232,7 @@ export default function BuildingRenderer() {
       <group key={wallId} position={[startX, level * heightPerFloor, startZ]} rotation={[0, rotationY, 0]}>
         {/* Wall body with cutouts - 3 Layers (Outer, Middle/Insulation, Inner) */}
         {uiState.seeThroughMode !== 'studsOnly' && (() => {
-          const { outer, middle, inner } = getWallLayers(wall);
+          const { outer, middle, inner } = wallLayers;
           const T = outer + middle + inner;
           const isSelected = uiState.selectedId === wallId;
           const mode = uiState.seeThroughMode;
