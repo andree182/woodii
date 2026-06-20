@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ProjectState, BuildingType, Dimensions, RoofConfig, FoundationConfig, WallLayersConfig, UIState, Floor, Wall, SubObject } from './types';
+import { ProjectState, BuildingType, Dimensions, RoofConfig, FoundationConfig, WallLayersConfig, StructuralConfig, UIState, Floor, Wall, InternalWall, SubObject } from './types';
 
 // Helper to create default walls based on dimensions
 export const createOuterWalls = (width: number, depth: number, thickness = 0.15, level = 0): Wall[] => {
@@ -122,6 +122,11 @@ interface ProjectStore extends ProjectState {
   removeSubObject: (wallId: string, subObjectId: string) => void;
   setFloorOpening: (floorId: string, opening: Floor['floorOpening'] | null) => void;
   setWallLayers: (layers: Partial<WallLayersConfig>) => void;
+  setWallPreset: (preset: 'custom' | 'diffusion_open' | 'diffusion_closed') => void;
+  addInternalWall: (floorId: string, start?: [number, number], end?: [number, number]) => void;
+  removeInternalWall: (floorId: string, wallId: string) => void;
+  updateInternalWall: (floorId: string, wallId: string, updates: Partial<InternalWall>) => void;
+  setStructuralConfig: (config: Partial<StructuralConfig>) => void;
   loadProject: (project: any) => void;
   resetProject: () => void;
 
@@ -152,6 +157,11 @@ const INITIAL_PROJECT_STATE = {
     outer: 0.02,
     middle: 0.10,
     inner: 0.03,
+  },
+  wallPreset: 'custom' as const,
+  structuralConfig: {
+    wallBlocking: false,
+    floorBlocking: false,
   },
   uiState: {
     selectedId: null,
@@ -346,6 +356,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       id: `floor-${nextLevel}`,
       level: nextLevel,
       walls: createOuterWalls(state.dimensions.width, state.dimensions.depth, T, nextLevel),
+      internalWalls: [],
     };
     return {
       floors: [...state.floors, newFloor]
@@ -372,11 +383,12 @@ export const useProjectStore = create<ProjectStore>((set) => ({
   })),
 
   updateSubObject: (wallId, subObjectId, updates) => set((state) => {
-    const floorId = wallId.includes('floor-') ? wallId.substring(0, wallId.indexOf('-wall-')) : null;
-    const cleanWallId = wallId.includes('floor-') ? wallId.substring(wallId.indexOf('wall-')) : wallId;
+    const isInternal = wallId.startsWith('internal-');
+    const floorId = !isInternal && wallId.includes('floor-') ? wallId.substring(0, wallId.indexOf('-wall-')) : null;
+    const cleanWallId = !isInternal && wallId.includes('floor-') ? wallId.substring(wallId.indexOf('wall-')) : wallId;
 
     const updatedFloors = state.floors.map(floor => {
-      if (floorId && floor.id !== floorId) return floor;
+      if (!isInternal && floorId && floor.id !== floorId) return floor;
       return {
         ...floor,
         walls: floor.walls.map(wall => {
@@ -466,6 +478,58 @@ export const useProjectStore = create<ProjectStore>((set) => ({
               };
             })
           };
+        }),
+        internalWalls: (floor.internalWalls || []).map(wall => {
+          if (wall.id !== wallId) return wall;
+          
+          const length = Math.sqrt(Math.pow(wall.end[0] - wall.start[0], 2) + Math.pow(wall.end[1] - wall.start[1], 2));
+          const totalThickness = wall.timberSize.width + wall.liningThickness * 2;
+          
+          return {
+            ...wall,
+            subObjects: wall.subObjects.map(obj => {
+              if (obj.id !== subObjectId) return obj;
+              
+              const merged = { ...obj, ...updates };
+              const maxWidth = Math.max(0.1, length - 2 * totalThickness);
+              const clampedWidth = Math.min(maxWidth, merged.width);
+              const halfW = clampedWidth / 2;
+              
+              const minPos = halfW + totalThickness;
+              const maxPos = length - halfW - totalThickness;
+              const clampedPos = maxPos >= minPos
+                ? Math.max(minPos, Math.min(maxPos, merged.position))
+                : length / 2;
+
+              const localWallHeight = state.dimensions.heightPerFloor - 0.14;
+              const lumberThickness = wall.timberSize.thickness;
+              const doubleTopPlate = lumberThickness * 2;
+              const headerThickness = 0.14;
+              const topClearance = doubleTopPlate + headerThickness;
+              let clampedHeight = merged.height;
+              let clampedElevation = merged.elevation !== undefined ? merged.elevation : (merged.type === 'door' ? 0 : 0.9);
+
+              if (merged.type === 'door') {
+                clampedElevation = 0;
+                clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance, merged.height));
+              } else if (merged.type === 'window') {
+                const minElevation = lumberThickness;
+                clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance - minElevation, merged.height));
+                clampedElevation = Math.max(minElevation, Math.min(localWallHeight - topClearance - clampedHeight, clampedElevation));
+              } else {
+                clampedElevation = 0;
+                clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance, merged.height));
+              }
+
+              return {
+                ...merged,
+                width: clampedWidth,
+                position: clampedPos,
+                height: clampedHeight,
+                elevation: clampedElevation
+              };
+            })
+          };
         })
       };
     });
@@ -473,15 +537,16 @@ export const useProjectStore = create<ProjectStore>((set) => ({
   }),
 
   addSubObject: (wallId, type) => set((state) => {
-    const floorId = wallId.includes('floor-') ? wallId.substring(0, wallId.indexOf('-wall-')) : null;
-    const cleanWallId = wallId.includes('floor-') ? wallId.substring(wallId.indexOf('wall-')) : wallId;
+    const isInternal = wallId.startsWith('internal-');
+    const floorId = !isInternal && wallId.includes('floor-') ? wallId.substring(0, wallId.indexOf('-wall-')) : null;
+    const cleanWallId = !isInternal && wallId.includes('floor-') ? wallId.substring(wallId.indexOf('wall-')) : wallId;
 
     const id = `${type}-${Date.now()}`;
     const widthVal = type === 'door' ? 0.9 : 1.0;
     const heightVal = type === 'window' ? 1.0 : 2.0;
 
     const updatedFloors = state.floors.map(floor => {
-      if (floorId && floor.id !== floorId) return floor;
+      if (!isInternal && floorId && floor.id !== floorId) return floor;
       return {
         ...floor,
         walls: floor.walls.map(wall => {
@@ -561,6 +626,57 @@ export const useProjectStore = create<ProjectStore>((set) => ({
             ...wall,
             subObjects: [...wall.subObjects, defaultObj]
           };
+        }),
+        internalWalls: (floor.internalWalls || []).map(wall => {
+          if (wall.id !== wallId) return wall;
+
+          const totalThickness = wall.timberSize.width + 2 * wall.liningThickness;
+          const length = Math.sqrt(Math.pow(wall.end[0] - wall.start[0], 2) + Math.pow(wall.end[1] - wall.start[1], 2));
+          const halfW = widthVal / 2;
+          const minPos = halfW + totalThickness;
+          const maxPos = length - halfW - totalThickness;
+
+          const clampedPos = maxPos >= minPos
+            ? Math.max(minPos, Math.min(maxPos, 1.0))
+            : length / 2;
+
+          const level = floor.level;
+          const isTopFloor = level === state.floors.length - 1;
+          const localWallHeight = isTopFloor ? state.dimensions.heightPerFloor : state.dimensions.heightPerFloor - 0.14;
+
+          const lumberThickness = wall.timberSize.thickness;
+          const doubleTopPlate = lumberThickness * 2;
+          const headerThickness = 0.14;
+          const topClearance = doubleTopPlate + headerThickness;
+          let clampedHeight = heightVal;
+          let clampedElevation = type === 'window' ? 0.9 : 0;
+
+          if (type === 'door') {
+            clampedElevation = 0;
+            clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance, heightVal));
+          } else if (type === 'window') {
+            const minElevation = lumberThickness;
+            clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance - minElevation, heightVal));
+            clampedElevation = Math.max(minElevation, Math.min(localWallHeight - topClearance - clampedHeight, clampedElevation));
+          } else {
+            clampedElevation = 0;
+            clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance, heightVal));
+          }
+
+          const defaultObj = {
+            id,
+            type,
+            position: clampedPos,
+            width: widthVal,
+            height: clampedHeight,
+            elevation: clampedElevation,
+            color: type === 'door' ? '#8B4513' : type === 'opening' ? '#222222' : '#ffffff',
+          };
+
+          return {
+            ...wall,
+            subObjects: [...wall.subObjects, defaultObj]
+          };
         })
       };
     });
@@ -576,15 +692,23 @@ export const useProjectStore = create<ProjectStore>((set) => ({
   }),
 
   removeSubObject: (wallId, subObjectId) => set((state) => {
-    const floorId = wallId.includes('floor-') ? wallId.substring(0, wallId.indexOf('-wall-')) : null;
-    const cleanWallId = wallId.includes('floor-') ? wallId.substring(wallId.indexOf('wall-')) : wallId;
+    const isInternal = wallId.startsWith('internal-');
+    const floorId = !isInternal && wallId.includes('floor-') ? wallId.substring(0, wallId.indexOf('-wall-')) : null;
+    const cleanWallId = !isInternal && wallId.includes('floor-') ? wallId.substring(wallId.indexOf('wall-')) : wallId;
 
     const updatedFloors = state.floors.map(floor => {
-      if (floorId && floor.id !== floorId) return floor;
+      if (!isInternal && floorId && floor.id !== floorId) return floor;
       return {
         ...floor,
         walls: floor.walls.map(wall => {
           if (wall.id !== cleanWallId) return wall;
+          return {
+            ...wall,
+            subObjects: wall.subObjects.filter(obj => obj.id !== subObjectId)
+          };
+        }),
+        internalWalls: (floor.internalWalls || []).map(wall => {
+          if (wall.id !== wallId) return wall;
           return {
             ...wall,
             subObjects: wall.subObjects.filter(obj => obj.id !== subObjectId)
@@ -627,7 +751,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
 
     if (draggedType === 'subObject') {
       let foundFloor: Floor | null = null;
-      let foundWall: Wall | null = null;
+      let foundWall: Wall | InternalWall | null = null;
       let foundObj: SubObject | null = null;
       
       for (const floor of state.floors) {
@@ -640,10 +764,25 @@ export const useProjectStore = create<ProjectStore>((set) => ({
             break;
           }
         }
+        if (foundObj) break;
+
+        if (floor.internalWalls) {
+          for (const wall of floor.internalWalls) {
+            const obj = wall.subObjects.find(o => o.id === draggedId);
+            if (obj) {
+              foundFloor = floor;
+              foundWall = wall;
+              foundObj = obj;
+              break;
+            }
+          }
+        }
+        if (foundObj) break;
       }
 
       if (!foundFloor || !foundWall || !foundObj) return {};
 
+      const isInternal = foundWall.id.startsWith('internal-');
       const startX = foundWall.start[0];
       const startZ = foundWall.start[1];
       const endX = foundWall.end[0];
@@ -661,7 +800,9 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       const pos = vx * ux + vz * uz;
 
       const halfW = foundObj.width / 2;
-      const wallThickness = foundWall.thickness;
+      const wallThickness = isInternal
+        ? (foundWall as InternalWall).timberSize.width + 2 * (foundWall as InternalWall).liningThickness
+        : (foundWall as Wall).thickness;
       const minPos = halfW + wallThickness;
       const maxPos = length - halfW - wallThickness;
       const clampedPos = maxPos >= minPos
@@ -678,23 +819,24 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       const angleRad = (state.roof.inclination * Math.PI) / 180;
       let localWallHeight = isTopFloor ? state.dimensions.heightPerFloor : state.dimensions.heightPerFloor - 0.14;
       
-      if (isTopFloor && isFlatRoof) {
+      // For internal walls, we do not slope with flat roof (they are interior partitions of constant height)
+      if (!isInternal && isTopFloor && isFlatRoof) {
         if (foundWall.id === 'wall-left') {
           localWallHeight = state.dimensions.heightPerFloor + (state.dimensions.width / 2) * Math.tan(angleRad);
         } else if (foundWall.id === 'wall-right') {
           localWallHeight = state.dimensions.heightPerFloor - (state.dimensions.width / 2) * Math.tan(angleRad);
         } else if (foundWall.id === 'wall-front' || foundWall.id === 'wall-back') {
           const isBack = foundWall.id === 'wall-back';
-          const hLeft = state.dimensions.heightPerFloor + (state.dimensions.width / 2 + foundWall.thickness * 0.5) * Math.tan(angleRad);
-          const hRight = state.dimensions.heightPerFloor - (state.dimensions.width / 2 + foundWall.thickness * 0.5) * Math.tan(angleRad);
+          const hLeft = state.dimensions.heightPerFloor + (state.dimensions.width / 2 + (foundWall as Wall).thickness * 0.5) * Math.tan(angleRad);
+          const hRight = state.dimensions.heightPerFloor - (state.dimensions.width / 2 + (foundWall as Wall).thickness * 0.5) * Math.tan(angleRad);
           localWallHeight = isBack
             ? hRight + clampedPos * Math.tan(angleRad)
             : hLeft - clampedPos * Math.tan(angleRad);
         }
       }
 
-      const lumberThickness = 0.04;
-      const doubleTopPlate = 0.08;
+      const lumberThickness = isInternal ? (foundWall as InternalWall).timberSize.thickness : 0.04;
+      const doubleTopPlate = lumberThickness * 2;
       const headerThickness = 0.14;
       const topClearance = doubleTopPlate + headerThickness; // 0.22
 
@@ -720,6 +862,21 @@ export const useProjectStore = create<ProjectStore>((set) => ({
         return {
           ...floor,
           walls: floor.walls.map(wall => {
+            if (wall.id !== foundWall!.id) return wall;
+            return {
+              ...wall,
+              subObjects: wall.subObjects.map(obj => 
+                obj.id === draggedId 
+                  ? { 
+                      ...obj, 
+                      position: clampedPos,
+                      ...(clampedElevation !== undefined ? { elevation: clampedElevation } : {}) 
+                    } 
+                  : obj
+              )
+            };
+          }),
+          internalWalls: (floor.internalWalls || []).map(wall => {
             if (wall.id !== foundWall!.id) return wall;
             return {
               ...wall,
@@ -1002,6 +1159,70 @@ export const useProjectStore = create<ProjectStore>((set) => ({
     };
   }),
 
+  addInternalWall: (floorId, start, end) => set((state) => {
+    const id = `internal-${floorId}-${Date.now()}`;
+    const defaultStart: [number, number] = start || [-1.0, 0];
+    const defaultEnd: [number, number] = end || [1.0, 0];
+    const newInternalWall: InternalWall = {
+      id,
+      start: defaultStart,
+      end: defaultEnd,
+      timberSize: { thickness: 0.04, width: 0.07 },
+      liningThickness: 0.0125,
+      subObjects: [],
+    };
+
+    return {
+      floors: state.floors.map(floor => {
+        if (floor.id !== floorId) return floor;
+        const currentInternalWalls = floor.internalWalls || [];
+        return {
+          ...floor,
+          internalWalls: [...currentInternalWalls, newInternalWall]
+        };
+      }),
+      uiState: {
+        ...state.uiState,
+        selectedId: id,
+        selectedType: 'wall'
+      }
+    };
+  }),
+
+  removeInternalWall: (floorId, wallId) => set((state) => {
+    return {
+      floors: state.floors.map(floor => {
+        if (floor.id !== floorId) return floor;
+        const currentInternalWalls = floor.internalWalls || [];
+        return {
+          ...floor,
+          internalWalls: currentInternalWalls.filter(w => w.id !== wallId)
+        };
+      }),
+      uiState: {
+        ...state.uiState,
+        selectedId: state.uiState.selectedId === wallId ? null : state.uiState.selectedId,
+        selectedType: state.uiState.selectedId === wallId ? null : state.uiState.selectedType,
+      }
+    };
+  }),
+
+  updateInternalWall: (floorId, wallId, updates) => set((state) => {
+    return {
+      floors: state.floors.map(floor => {
+        if (floor.id !== floorId) return floor;
+        const currentInternalWalls = floor.internalWalls || [];
+        return {
+          ...floor,
+          internalWalls: currentInternalWalls.map(w => {
+            if (w.id !== wallId) return w;
+            return { ...w, ...updates };
+          })
+        };
+      })
+    };
+  }),
+
   setWallLayers: (layers) => set((state) => {
     const newLayers = { ...state.wallLayers, ...layers };
     const T = newLayers.outer + newLayers.middle + newLayers.inner;
@@ -1054,10 +1275,76 @@ export const useProjectStore = create<ProjectStore>((set) => ({
     });
 
     return {
+      wallPreset: 'custom',
       wallLayers: newLayers,
       floors: updatedFloors,
     };
   }),
+
+  setWallPreset: (preset) => set((state) => {
+    let newLayers = { ...state.wallLayers };
+    if (preset === 'diffusion_open') {
+      newLayers = { outer: 0.02, middle: 0.10, inner: 0.015 };
+    } else if (preset === 'diffusion_closed') {
+      newLayers = { outer: 0.035, middle: 0.10, inner: 0.00 };
+    }
+
+    const T = newLayers.outer + newLayers.middle + newLayers.inner;
+
+    const updatedFloors = state.floors.map((floor) => {
+      const updatedWalls = floor.walls.map((wall) => ({
+        ...wall,
+        thickness: T,
+      }));
+
+      const relocatedWalls = recalculateWallCoordinates(
+        state.dimensions.width,
+        state.dimensions.depth,
+        updatedWalls
+      );
+
+      const finalWalls = relocatedWalls.map((w) => {
+        const wallLength = Math.sqrt(
+          Math.pow(w.end[0] - w.start[0], 2) +
+          Math.pow(w.end[1] - w.start[1], 2)
+        );
+        const adjustedSubObjects = w.subObjects.map((obj) => {
+          const maxWidth = Math.max(0.1, wallLength - 2 * w.thickness);
+          const clampedWidth = Math.min(maxWidth, obj.width);
+          const halfW = clampedWidth / 2;
+          const minPos = halfW + w.thickness;
+          const maxPos = wallLength - halfW - w.thickness;
+          const clampedPos = maxPos >= minPos
+            ? Math.max(minPos, Math.min(maxPos, obj.position))
+            : wallLength / 2;
+          return {
+            ...obj,
+            width: clampedWidth,
+            position: clampedPos,
+          };
+        });
+        return {
+          ...w,
+          subObjects: adjustedSubObjects,
+        };
+      });
+
+      return {
+        ...floor,
+        walls: finalWalls,
+      };
+    });
+
+    return {
+      wallPreset: preset,
+      wallLayers: newLayers,
+      floors: updatedFloors,
+    };
+  }),
+
+  setStructuralConfig: (config) => set((state) => ({
+    structuralConfig: { ...state.structuralConfig, ...config }
+  })),
 
   loadProject: (project) => set((state) => {
     if (!project || !project.dimensions || !project.floors) return {};
@@ -1067,6 +1354,8 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       roof: { ...state.roof, ...project.roof },
       foundation: project.foundation || state.foundation,
       wallLayers: project.wallLayers || state.wallLayers,
+      wallPreset: project.wallPreset || state.wallPreset,
+      structuralConfig: project.structuralConfig || state.structuralConfig || { wallBlocking: false, floorBlocking: false },
       floors: project.floors,
       uiState: { ...state.uiState, selectedId: null, selectedType: null }
     };
@@ -1079,6 +1368,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
         id: 'floor-0',
         level: 0,
         walls: createOuterWalls(4.0, 3.0, 0.15, 0),
+        internalWalls: [],
       }
     ]
   }))

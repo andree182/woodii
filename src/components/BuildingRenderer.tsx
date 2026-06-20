@@ -1,6 +1,6 @@
 import { DoubleSide, FrontSide, Side, Shape, Path, Plane, Vector3 } from 'three';
 import { useProjectStore } from '../store';
-import { Wall, Floor } from '../types';
+import { Wall, Floor, InternalWall } from '../types';
 import { generateFraming } from '../utils/framingEngine';
 
 export default function BuildingRenderer() {
@@ -10,6 +10,7 @@ export default function BuildingRenderer() {
   const uiState = useProjectStore((state) => state.uiState);
   const foundation = useProjectStore((state) => state.foundation);
   const wallLayers = useProjectStore((state) => state.wallLayers);
+  const wallPreset = useProjectStore((state) => state.wallPreset);
   const selectObject = useProjectStore((state) => state.selectObject);
   const startDragging = useProjectStore((state) => state.startDragging);
   const stopDragging = useProjectStore((state) => state.stopDragging);
@@ -245,7 +246,7 @@ export default function BuildingRenderer() {
               suffix: 'outer',
               zOffset: T / 2 - outer,
               depth: outer,
-              color: '#8b5a2b', // Wood siding brown
+              color: wallPreset === 'diffusion_closed' ? '#5c3a21' : '#8b5a2b', // Wood siding brown
               opacity: mode === 'seeThrough' ? 0.15 : 1.0,
               xStartOffset: isSideWall ? -T : outer,
               xEndOffset: isSideWall ? -T : outer,
@@ -253,7 +254,7 @@ export default function BuildingRenderer() {
             {
               suffix: 'middle',
               zOffset: -T / 2 + inner,
-              depth: middle,
+              depth: wallPreset === 'diffusion_closed' ? 0 : middle,
               color: '#ded29e', // Rockwool insulation yellow
               opacity: mode === 'seeThrough' ? 0.25 : 1.0,
               xStartOffset: isSideWall ? -inner : outer,
@@ -263,7 +264,7 @@ export default function BuildingRenderer() {
               suffix: 'inner',
               zOffset: -T / 2,
               depth: inner,
-              color: '#e6e6e6', // Drywall off-white
+              color: wallPreset === 'diffusion_open' ? '#d2b48c' : '#e6e6e6', // OSB tan or Drywall off-white
               opacity: mode === 'seeThrough' ? 0.5 : 1.0,
               xStartOffset: isSideWall ? -inner : inner + middle,
               xEndOffset: isSideWall ? -inner : inner + middle,
@@ -272,7 +273,7 @@ export default function BuildingRenderer() {
 
           return (
             <group>
-              {layers.map((layer) => {
+              {layers.filter(layer => layer.depth > 0.001).map((layer) => {
                 const layerColor = isSelected ? '#ff8c00' : layer.color;
                 const layerOpacity = isSelected ? Math.min(1.0, layer.opacity + 0.15) : layer.opacity;
                 const isTransparent = mode === 'seeThrough';
@@ -546,6 +547,272 @@ export default function BuildingRenderer() {
     );
   };
 
+  // Render an internal partition wall
+  const renderInternalWall = (wall: InternalWall, level: number) => {
+    const startX = wall.start[0];
+    const startZ = wall.start[1];
+    const endX = wall.end[0];
+    const endZ = wall.end[1];
+
+    // Compute length and rotation
+    const dx = endX - startX;
+    const dz = endZ - startZ;
+    const length = Math.sqrt(dx * dx + dz * dz);
+    if (length < 0.05) return null;
+    const rotationY = -Math.atan2(dz, dx);
+
+    const wallId = wall.id; // Internal wall IDs are already globally unique
+    const isSelected = uiState.selectedId === wallId;
+
+    // Const height
+    const joistHeight = 0.14;
+    const isTopFloor = level === totalFloors - 1;
+    const baseHeight = isTopFloor ? heightPerFloor : heightPerFloor - joistHeight;
+    const wallBaseHeight = baseHeight;
+
+    const createInternalWallShape = (xStartOffset: number, xEndOffset: number) => {
+      const shape = new Shape();
+      shape.moveTo(xStartOffset, 0);
+      shape.lineTo(length - xEndOffset, 0);
+      shape.lineTo(length - xEndOffset, wallBaseHeight);
+      shape.lineTo(xStartOffset, wallBaseHeight);
+      shape.closePath();
+
+      wall.subObjects.forEach((obj) => {
+        const isDoor = obj.type === 'door';
+        const defaultElevation = isDoor ? 0 : 0.9;
+        const currentElevation = obj.elevation !== undefined ? obj.elevation : defaultElevation;
+        
+        const lumberThickness = wall.timberSize.thickness;
+        const doubleTopPlate = lumberThickness * 2;
+        const headerThickness = 0.14;
+        const topClearance = doubleTopPlate + headerThickness;
+        const clampedElevation = Math.max(0, Math.min(Math.max(0, wallBaseHeight - topClearance - obj.height), currentElevation));
+
+        const objLeft = obj.position - obj.width / 2;
+        const objRight = obj.position + obj.width / 2;
+        if (objRight > xStartOffset && objLeft < length - xEndOffset) {
+          const holePath = new Path();
+          const xStart = Math.max(xStartOffset, objLeft);
+          const xEnd = Math.min(length - xEndOffset, objRight);
+          const yStart = clampedElevation;
+          const yEnd = clampedElevation + obj.height;
+
+          holePath.moveTo(xStart, yStart);
+          holePath.lineTo(xStart, yEnd);
+          holePath.lineTo(xEnd, yEnd);
+          holePath.lineTo(xEnd, yStart);
+          holePath.closePath();
+
+          shape.holes.push(holePath);
+        }
+      });
+
+      return shape;
+    };
+
+    return (
+      <group key={wallId} position={[startX, level * heightPerFloor, startZ]} rotation={[0, rotationY, 0]}>
+        {/* Partition Drywall Layers - 2 Layers (Left, Right) */}
+        {uiState.seeThroughMode !== 'studsOnly' && (() => {
+          const mode = uiState.seeThroughMode;
+          const { width: timberWidth } = wall.timberSize;
+          const lining = wall.liningThickness;
+
+          // lining layers are on both sides of the studs core
+          const layers = [
+            {
+              suffix: 'left',
+              zOffset: -timberWidth / 2 - lining,
+              depth: lining,
+              color: '#e6e6e6', // Drywall off-white
+              opacity: mode === 'seeThrough' ? 0.5 : 1.0,
+            },
+            {
+              suffix: 'right',
+              zOffset: timberWidth / 2,
+              depth: lining,
+              color: '#e6e6e6', // Drywall off-white
+              opacity: mode === 'seeThrough' ? 0.5 : 1.0,
+            }
+          ];
+
+          return (
+            <group>
+              {layers.filter(l => l.depth > 0.001).map((layer) => {
+                const layerColor = isSelected ? '#ff8c00' : layer.color;
+                const layerOpacity = isSelected ? Math.min(1.0, layer.opacity + 0.15) : layer.opacity;
+                const isTransparent = mode === 'seeThrough';
+                const shape = createInternalWallShape(0, 0);
+
+                return (
+                  <mesh
+                    key={`${wallId}-${layer.suffix}`}
+                    position={[0, 0, layer.zOffset]}
+                    castShadow
+                    receiveShadow
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      selectObject(wallId, 'wall');
+                    }}
+                  >
+                    <extrudeGeometry args={[shape, { depth: layer.depth, bevelEnabled: false }]} />
+                    <meshStandardMaterial
+                      color={layerColor}
+                      roughness={0.7}
+                      transparent={isTransparent}
+                      opacity={layerOpacity}
+                      depthWrite={!isTransparent}
+                      side={isTransparent ? DoubleSide : FrontSide}
+                    />
+                  </mesh>
+                );
+              })}
+            </group>
+          );
+        })()}
+
+        {/* Sub-objects nested in internal wall space (Doors) */}
+        {wall.subObjects.map((rawObj) => {
+          const isDoor = rawObj.type === 'door';
+          const isWindow = rawObj.type === 'window';
+          const isOpening = rawObj.type === 'opening';
+
+          const defaultElevation = isDoor ? 0 : (isWindow ? 0.9 : 0);
+          const currentElevation = rawObj.elevation !== undefined ? rawObj.elevation : defaultElevation;
+          
+          const lumberThickness = wall.timberSize.thickness;
+          const doubleTopPlate = lumberThickness * 2;
+          const headerThickness = 0.14;
+          const topClearance = doubleTopPlate + headerThickness;
+          let clampedElevation = currentElevation;
+          let clampedHeight = rawObj.height;
+
+          if (isDoor) {
+            clampedElevation = 0;
+            clampedHeight = Math.max(0.1, Math.min(wallBaseHeight - topClearance, rawObj.height));
+          } else if (isWindow) {
+            const minElevation = lumberThickness;
+            clampedHeight = Math.max(0.1, Math.min(wallBaseHeight - topClearance - minElevation, rawObj.height));
+            clampedElevation = Math.max(minElevation, Math.min(wallBaseHeight - topClearance - clampedHeight, currentElevation));
+          } else {
+            if (currentElevation < 0.05) {
+              clampedElevation = 0;
+              clampedHeight = Math.max(0.1, Math.min(wallBaseHeight - topClearance, rawObj.height));
+            } else {
+              const minElevation = lumberThickness;
+              clampedHeight = Math.max(0.1, Math.min(wallBaseHeight - topClearance - minElevation, rawObj.height));
+              clampedElevation = Math.max(minElevation, Math.min(wallBaseHeight - topClearance - clampedHeight, currentElevation));
+            }
+          }
+          
+          const obj = { ...rawObj, height: clampedHeight, elevation: clampedElevation };
+          const localY = obj.elevation + obj.height / 2;
+          const objId = obj.id;
+
+          const defaultColor = isOpening ? '#222222' : (obj.color || '#a0d0f0');
+          const objMatProps = getMaterialProps(objId, 'subObject', defaultColor);
+          
+          if (isOpening) {
+            objMatProps.transparent = true;
+            objMatProps.opacity = uiState.selectedId === objId ? 0.3 : 0.0;
+            objMatProps.depthWrite = false;
+          } else if (isWindow) {
+            objMatProps.transparent = true;
+            objMatProps.opacity = uiState.selectedId === objId ? 0.8 : 0.4;
+          }
+
+          const wallCenterX = startX + obj.position * Math.cos(rotationY);
+          const wallCenterZ = startZ - obj.position * Math.sin(rotationY);
+          const wallThickness = wall.timberSize.width + wall.liningThickness * 2;
+
+          return (
+            <group
+              key={objId}
+              position={[obj.position, localY, 0]}
+            >
+              {/* Raycast block for selection and dragging */}
+              <mesh
+                castShadow={false}
+                receiveShadow={false}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  selectObject(objId, 'subObject');
+                }}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  selectObject(objId, 'subObject');
+                  startDragging(objId, 'subObject');
+                  (e.target as any).setPointerCapture?.(e.pointerId);
+                }}
+                onPointerUp={(e) => {
+                  e.stopPropagation();
+                  stopDragging();
+                  (e.target as any).releasePointerCapture?.(e.pointerId);
+                }}
+                onPointerMove={(e) => {
+                  if (uiState.isDragging && uiState.draggedId === objId) {
+                    e.stopPropagation();
+                    const normal = new Vector3(-dz, 0, dx).normalize();
+                    const wallPlane = new Plane().setFromNormalAndCoplanarPoint(
+                      normal,
+                      new Vector3(wallCenterX, 0, wallCenterZ)
+                    );
+                    const intersection = new Vector3();
+                    e.ray.intersectPlane(wallPlane, intersection);
+                    updateDragPosition([intersection.x, intersection.y, intersection.z]);
+                  }
+                }}
+                onPointerOver={(e) => {
+                  e.stopPropagation();
+                  document.body.style.cursor = 'move';
+                }}
+                onPointerOut={(e) => {
+                  e.stopPropagation();
+                  document.body.style.cursor = 'default';
+                }}
+              >
+                <boxGeometry args={[obj.width, obj.height, wallThickness + 0.04]} />
+                <meshBasicMaterial 
+                  transparent={true} 
+                  opacity={0} 
+                  depthWrite={false} 
+                />
+              </mesh>
+
+              {/* Window glass and frame */}
+              {isWindow && (
+                <mesh>
+                  <boxGeometry args={[obj.width - 0.08, obj.height - 0.08, 0.02]} />
+                  <meshStandardMaterial
+                    color={objMatProps.color}
+                    transparent={objMatProps.transparent}
+                    opacity={objMatProps.opacity}
+                    roughness={0.1}
+                    metalness={0.9}
+                  />
+                </mesh>
+              )}
+
+              {/* Door panel (if selected, opens slightly) */}
+              {isDoor && (
+                <group position={[-obj.width / 2, 0, 0]} rotation={[0, isSelected ? Math.PI / 4 : 0, 0]}>
+                  <mesh position={[obj.width / 2, 0, 0]}>
+                    <boxGeometry args={[obj.width - 0.02, obj.height - 0.02, 0.04]} />
+                    <meshStandardMaterial
+                      color={uiState.selectedId === objId ? '#ff8c00' : '#8b4513'}
+                      roughness={0.6}
+                    />
+                  </mesh>
+                </group>
+              )}
+            </group>
+          );
+        })}
+      </group>
+    );
+  };
+
   // Render the roof
   const renderRoof = () => {
     if (uiState.seeThroughMode === 'studsOnly') return null;
@@ -633,17 +900,18 @@ export default function BuildingRenderer() {
             <>
               {/* Front Gable */}
               {(() => {
-                const T = wallThickness;
+                const { outer, middle, inner } = wallLayers;
+                const T = outer + middle + inner;
                 const isSelected = uiState.selectedId === 'roof';
                 const mode = uiState.seeThroughMode;
                 const layers = [
-                  { suffix: 'outer', zOffset: T * 0.85, depth: T * 0.15, color: '#8b5a2b', opacity: mode === 'seeThrough' ? 0.15 : 1.0, xOffset: T * 0.15 },
-                  { suffix: 'middle', zOffset: T * 0.15, depth: T * 0.70, color: '#ded29e', opacity: mode === 'seeThrough' ? 0.25 : 1.0, xOffset: T * 0.15 },
-                  { suffix: 'inner', zOffset: 0, depth: T * 0.15, color: '#e6e6e6', opacity: mode === 'seeThrough' ? 0.5 : 1.0, xOffset: T * 0.85 }
+                  { suffix: 'outer', zOffset: inner + middle, depth: outer, color: wallPreset === 'diffusion_closed' ? '#5c3a21' : '#8b5a2b', opacity: mode === 'seeThrough' ? 0.15 : 1.0, xOffset: outer },
+                  { suffix: 'middle', zOffset: inner, depth: wallPreset === 'diffusion_closed' ? 0 : middle, color: '#ded29e', opacity: mode === 'seeThrough' ? 0.25 : 1.0, xOffset: outer },
+                  { suffix: 'inner', zOffset: 0, depth: inner, color: wallPreset === 'diffusion_open' ? '#d2b48c' : '#e6e6e6', opacity: mode === 'seeThrough' ? 0.5 : 1.0, xOffset: outer + middle }
                 ];
                 return (
                   <group position={[0, topElevation, depth / 2 - T / 2]} rotation={[0, 0, 0]}>
-                    {layers.map((layer) => {
+                    {layers.filter(layer => layer.depth > 0.001).map((layer) => {
                       const shape = createGableShape(layer.xOffset);
                       return (
                         <mesh key={`front-gable-${layer.suffix}`} position={[0, 0, layer.zOffset]} castShadow receiveShadow>
@@ -665,17 +933,18 @@ export default function BuildingRenderer() {
 
               {/* Back Gable */}
               {(() => {
-                const T = wallThickness;
+                const { outer, middle, inner } = wallLayers;
+                const T = outer + middle + inner;
                 const isSelected = uiState.selectedId === 'roof';
                 const mode = uiState.seeThroughMode;
                 const layers = [
-                  { suffix: 'outer', zOffset: T * 0.85, depth: T * 0.15, color: '#8b5a2b', opacity: mode === 'seeThrough' ? 0.15 : 1.0, xOffset: T * 0.15 },
-                  { suffix: 'middle', zOffset: T * 0.15, depth: T * 0.70, color: '#ded29e', opacity: mode === 'seeThrough' ? 0.25 : 1.0, xOffset: T * 0.15 },
-                  { suffix: 'inner', zOffset: 0, depth: T * 0.15, color: '#e6e6e6', opacity: mode === 'seeThrough' ? 0.5 : 1.0, xOffset: T * 0.85 }
+                  { suffix: 'outer', zOffset: inner + middle, depth: outer, color: wallPreset === 'diffusion_closed' ? '#5c3a21' : '#8b5a2b', opacity: mode === 'seeThrough' ? 0.15 : 1.0, xOffset: outer },
+                  { suffix: 'middle', zOffset: inner, depth: wallPreset === 'diffusion_closed' ? 0 : middle, color: '#ded29e', opacity: mode === 'seeThrough' ? 0.25 : 1.0, xOffset: outer },
+                  { suffix: 'inner', zOffset: 0, depth: inner, color: wallPreset === 'diffusion_open' ? '#d2b48c' : '#e6e6e6', opacity: mode === 'seeThrough' ? 0.5 : 1.0, xOffset: outer + middle }
                 ];
                 return (
                   <group position={[0, topElevation, -depth / 2 + T / 2]} rotation={[0, Math.PI, 0]}>
-                    {layers.map((layer) => {
+                    {layers.filter(layer => layer.depth > 0.001).map((layer) => {
                       const shape = createGableShape(layer.xOffset);
                       return (
                         <mesh key={`back-gable-${layer.suffix}`} position={[0, 0, layer.zOffset]} castShadow receiveShadow>
@@ -721,6 +990,7 @@ export default function BuildingRenderer() {
         <group key={floor.id}>
           {renderFloorSlab(floor)}
           {floor.walls.map((wall) => renderWall(wall, floor.level, floor.id))}
+          {(floor.internalWalls || []).map((wall) => renderInternalWall(wall, floor.level))}
         </group>
       ))}
 

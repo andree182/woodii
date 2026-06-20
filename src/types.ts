@@ -24,10 +24,25 @@ export interface Wall {
   subObjects: SubObject[];
 }
 
+export interface TimberSize {
+  thickness: number; // e.g. 0.04m (40mm thickness)
+  width: number;     // e.g. 0.07m (70mm width)
+}
+
+export interface InternalWall {
+  id: string;
+  start: [number, number]; // 2D start coordinate relative to floor center
+  end: [number, number];   // 2D end coordinate relative to floor center
+  timberSize: TimberSize;
+  liningThickness: number; // e.g. 0.0125m (drywall lining thickness on both sides)
+  subObjects: SubObject[]; // Supports doors
+}
+
 export interface Floor {
   id: string;
   level: number; // 0 for ground floor, 1, 2, etc.
   walls: Wall[];
+  internalWalls?: InternalWall[]; // User-defined internal partition walls
   floorOpening?: {
     x: number;
     z: number;
@@ -70,6 +85,11 @@ export interface WallLayersConfig {
   inner: number;
 }
 
+export interface StructuralConfig {
+  wallBlocking: boolean;
+  floorBlocking: boolean;
+}
+
 export interface ProjectState {
   buildingType: BuildingType;
   dimensions: Dimensions;
@@ -77,5 +97,7 @@ export interface ProjectState {
   roof: RoofConfig;
   foundation: FoundationConfig;
   wallLayers: WallLayersConfig;
+  wallPreset: 'custom' | 'diffusion_open' | 'diffusion_closed';
+  structuralConfig: StructuralConfig;
   uiState: UIState;
 }

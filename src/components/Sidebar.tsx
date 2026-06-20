@@ -15,6 +15,8 @@ export default function Sidebar() {
     roof,
     foundation,
     wallLayers,
+    wallPreset,
+    structuralConfig,
     uiState,
     floors,
     setBuildingType,
@@ -22,6 +24,11 @@ export default function Sidebar() {
     setRoofConfig,
     setFoundationConfig,
     setWallLayers,
+    setWallPreset,
+    setStructuralConfig,
+    addInternalWall,
+    removeInternalWall,
+    updateInternalWall,
     updateUIState,
     addFloor,
     removeLastFloor,
@@ -43,6 +50,8 @@ export default function Sidebar() {
         roof: stateObj.roof,
         foundation: stateObj.foundation,
         wallLayers: stateObj.wallLayers,
+        wallPreset: stateObj.wallPreset,
+        structuralConfig: stateObj.structuralConfig,
         floors: stateObj.floors
       }, null, 2)
     );
@@ -74,17 +83,28 @@ export default function Sidebar() {
 
   // Find currently selected object if any
   let selectedWall: any = null;
+  let selectedInternalWall: any = null;
   let selectedSubObj: any = null;
   let parentWallIdOfSubObj: string = '';
 
   if (selectedType === 'wall' && selectedId) {
-    // Expected id format: floorId-wallId (e.g. floor-0-wall-front)
-    const parts = selectedId.split('-');
-    const floorId = `${parts[0]}-${parts[1]}`;
-    const wallId = parts.slice(2).join('-');
-    const floor = floors.find(f => f.id === floorId);
-    if (floor) {
-      selectedWall = floor.walls.find(w => w.id === wallId);
+    if (selectedId.startsWith('internal-')) {
+      for (const floor of floors) {
+        const found = (floor.internalWalls || []).find(w => w.id === selectedId);
+        if (found) {
+          selectedInternalWall = found;
+          break;
+        }
+      }
+    } else {
+      // Expected id format: floorId-wallId (e.g. floor-0-wall-front)
+      const parts = selectedId.split('-');
+      const floorId = `${parts[0]}-${parts[1]}`;
+      const wallId = parts.slice(2).join('-');
+      const floor = floors.find(f => f.id === floorId);
+      if (floor) {
+        selectedWall = floor.walls.find(w => w.id === wallId);
+      }
     }
   } else if (selectedType === 'subObject' && selectedId) {
     for (const floor of floors) {
@@ -97,6 +117,20 @@ export default function Sidebar() {
           break;
         }
       }
+      if (selectedSubObj) break;
+
+      if (floor.internalWalls) {
+        for (const wall of floor.internalWalls) {
+          const found = wall.subObjects.find(obj => obj.id === selectedId);
+          if (found) {
+            selectedSubObj = found;
+            selectedWall = wall;
+            parentWallIdOfSubObj = wall.id;
+            break;
+          }
+        }
+      }
+      if (selectedSubObj) break;
     }
   }
 
@@ -355,6 +389,28 @@ export default function Sidebar() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <label style={{ fontSize: '11px', color: '#ccc' }}>Preset:</label>
+                <select
+                  value={wallPreset}
+                  onChange={(e) => setWallPreset(e.target.value as any)}
+                  style={{
+                    width: '120px',
+                    padding: '6px',
+                    backgroundColor: '#1a1a1a',
+                    border: '1px solid #444',
+                    borderRadius: '6px',
+                    color: '#fff',
+                    fontSize: '11px',
+                    outline: 'none'
+                  }}
+                >
+                  <option value="custom">Custom</option>
+                  <option value="diffusion_open">Diffusion-Open</option>
+                  <option value="diffusion_closed">Diffusion-Closed</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <label style={{ fontSize: '11px', color: '#ccc' }}>Outer Siding (m):</label>
                 <input
                   type="number"
@@ -362,6 +418,7 @@ export default function Sidebar() {
                   min="0.005"
                   max="0.10"
                   value={wallLayers.outer}
+                  disabled={wallPreset !== 'custom'}
                   onChange={(e) => {
                     const val = parseFloat(e.target.value) || 0.02;
                     setWallLayers({ outer: val });
@@ -375,7 +432,9 @@ export default function Sidebar() {
                     color: '#fff',
                     fontSize: '11px',
                     outline: 'none',
-                    textAlign: 'right'
+                    textAlign: 'right',
+                    opacity: wallPreset !== 'custom' ? 0.5 : 1,
+                    cursor: wallPreset !== 'custom' ? 'not-allowed' : 'text'
                   }}
                 />
               </div>
@@ -388,6 +447,7 @@ export default function Sidebar() {
                   min="0.04"
                   max="0.30"
                   value={wallLayers.middle}
+                  disabled={wallPreset !== 'custom'}
                   onChange={(e) => {
                     const val = parseFloat(e.target.value) || 0.10;
                     setWallLayers({ middle: val });
@@ -401,7 +461,9 @@ export default function Sidebar() {
                     color: '#fff',
                     fontSize: '11px',
                     outline: 'none',
-                    textAlign: 'right'
+                    textAlign: 'right',
+                    opacity: wallPreset !== 'custom' ? 0.5 : 1,
+                    cursor: wallPreset !== 'custom' ? 'not-allowed' : 'text'
                   }}
                 />
               </div>
@@ -411,9 +473,10 @@ export default function Sidebar() {
                 <input
                   type="number"
                   step="0.005"
-                  min="0.005"
+                  min={wallPreset === 'custom' ? 0.005 : 0}
                   max="0.10"
                   value={wallLayers.inner}
+                  disabled={wallPreset !== 'custom'}
                   onChange={(e) => {
                     const val = parseFloat(e.target.value) || 0.03;
                     setWallLayers({ inner: val });
@@ -427,13 +490,46 @@ export default function Sidebar() {
                     color: '#fff',
                     fontSize: '11px',
                     outline: 'none',
-                    textAlign: 'right'
+                    textAlign: 'right',
+                    opacity: wallPreset !== 'custom' ? 0.5 : 1,
+                    cursor: wallPreset !== 'custom' ? 'not-allowed' : 'text'
                   }}
                 />
               </div>
 
               <div style={{ fontSize: '10px', color: '#888', borderTop: '1px solid #2a2a2a', paddingTop: '6px', marginTop: '4px' }}>
                 Total wall thickness: <strong>{(wallLayers.outer + wallLayers.middle + wallLayers.inner).toFixed(3)}m</strong>
+              </div>
+            </div>
+          </section>
+
+          {/* Framing & Robustness Config */}
+          <section>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>Framing & Robustness</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="checkbox"
+                  id="wall-blocking-toggle"
+                  checked={structuralConfig?.wallBlocking || false}
+                  onChange={(e) => setStructuralConfig({ wallBlocking: e.target.checked })}
+                  style={{ cursor: 'pointer' }}
+                />
+                <label htmlFor="wall-blocking-toggle" style={{ fontSize: '11px', color: '#ccc', cursor: 'pointer' }}>
+                  Staggered Wall Blocking (Noggings)
+                </label>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="checkbox"
+                  id="floor-blocking-toggle"
+                  checked={structuralConfig?.floorBlocking || false}
+                  onChange={(e) => setStructuralConfig({ floorBlocking: e.target.checked })}
+                  style={{ cursor: 'pointer' }}
+                />
+                <label htmlFor="floor-blocking-toggle" style={{ fontSize: '11px', color: '#ccc', cursor: 'pointer' }}>
+                  Staggered Floor Blocking
+                </label>
               </div>
             </div>
           </section>
@@ -666,6 +762,173 @@ export default function Sidebar() {
                     </div>
                   </div>
                 )}
+
+                {selectedType === 'wall' && selectedInternalWall && (() => {
+                  const wall = selectedInternalWall;
+                  const floor = floors.find(f => (f.internalWalls || []).some(w => w.id === wall.id));
+                  if (!floor) return null;
+                  
+                  const length = Math.sqrt(
+                    Math.pow(wall.end[0] - wall.start[0], 2) +
+                    Math.pow(wall.end[1] - wall.start[1], 2)
+                  );
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <p style={{ margin: 0, fontSize: '12px', color: '#aaa' }}>
+                        Partition Wall coordinates: [{wall.start.map((coord: number) => coord.toFixed(2)).join(', ')}] to [{wall.end.map((coord: number) => coord.toFixed(2)).join(', ')}]
+                      </p>
+                      <div style={{ fontSize: '11px', color: '#888' }}>
+                        Length: <strong>{length.toFixed(2)}m</strong>
+                      </div>
+
+                      {/* Coordinates Edit */}
+                      <div style={{ borderTop: '1px solid #333', paddingTop: '10px', marginTop: '6px' }}>
+                        <h4 style={{ margin: '0 0 8px 0', fontSize: '11px', color: '#ff8c00', textTransform: 'uppercase' }}>Coordinates</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Start X (m)</label>
+                            <input
+                              type="number"
+                              step="0.05"
+                              value={wall.start[0]}
+                              onChange={(e) => updateInternalWall(floor.id, wall.id, { start: [parseFloat(e.target.value) || 0, wall.start[1]] })}
+                              style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Start Z (m)</label>
+                            <input
+                              type="number"
+                              step="0.05"
+                              value={wall.start[1]}
+                              onChange={(e) => updateInternalWall(floor.id, wall.id, { start: [wall.start[0], parseFloat(e.target.value) || 0] })}
+                              style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                            />
+                          </div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>End X (m)</label>
+                            <input
+                              type="number"
+                              step="0.05"
+                              value={wall.end[0]}
+                              onChange={(e) => updateInternalWall(floor.id, wall.id, { end: [parseFloat(e.target.value) || 0, wall.end[1]] })}
+                              style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>End Z (m)</label>
+                            <input
+                              type="number"
+                              step="0.05"
+                              value={wall.end[1]}
+                              onChange={(e) => updateInternalWall(floor.id, wall.id, { end: [wall.end[0], parseFloat(e.target.value) || 0] })}
+                              style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Timber Configuration */}
+                      <div style={{ borderTop: '1px solid #333', paddingTop: '10px', marginTop: '6px' }}>
+                        <h4 style={{ margin: '0 0 8px 0', fontSize: '11px', color: '#ff8c00', textTransform: 'uppercase' }}>Timber & Lining</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Stud Thick (m)</label>
+                            <input
+                              type="number"
+                              step="0.005"
+                              min="0.02"
+                              max="0.10"
+                              value={wall.timberSize.thickness}
+                              onChange={(e) => updateInternalWall(floor.id, wall.id, { timberSize: { ...wall.timberSize, thickness: parseFloat(e.target.value) || 0.04 } })}
+                              style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Stud Depth (m)</label>
+                            <input
+                              type="number"
+                              step="0.005"
+                              min="0.04"
+                              max="0.20"
+                              value={wall.timberSize.width}
+                              onChange={(e) => updateInternalWall(floor.id, wall.id, { timberSize: { ...wall.timberSize, width: parseFloat(e.target.value) || 0.07 } })}
+                              style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Lining Thickness (m)</label>
+                          <input
+                            type="number"
+                            step="0.002"
+                            min="0.00"
+                            max="0.05"
+                            value={wall.liningThickness}
+                            onChange={(e) => updateInternalWall(floor.id, wall.id, { liningThickness: parseFloat(e.target.value) || 0 })}
+                            style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Add Door */}
+                      <div style={{ borderTop: '1px solid #333', paddingTop: '10px', marginTop: '6px', display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={() => addSubObject(wall.id, 'door')}
+                          style={{
+                            flex: 1,
+                            padding: '6px',
+                            backgroundColor: '#ff8c00',
+                            color: '#000',
+                            fontWeight: 600,
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          + Door
+                        </button>
+                        <button
+                          onClick={() => addSubObject(wall.id, 'opening')}
+                          style={{
+                            flex: 1,
+                            padding: '6px',
+                            backgroundColor: '#ff8c00',
+                            color: '#000',
+                            fontWeight: 600,
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          + Opening
+                        </button>
+                      </div>
+
+                      {/* Delete Wall */}
+                      <div style={{ borderTop: '1px solid #333', paddingTop: '10px', marginTop: '6px' }}>
+                        <button
+                          onClick={() => removeInternalWall(floor.id, wall.id)}
+                          style={{
+                            width: '100%',
+                            padding: '6px',
+                            backgroundColor: '#c62828',
+                            color: '#fff',
+                            fontWeight: 600,
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Delete Partition Wall
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {selectedType === 'subObject' && selectedSubObj && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -932,6 +1195,82 @@ export default function Sidebar() {
                             </button>
                           </div>
                         )}
+                      {/* Partition Walls Editor */}
+                      {!isRoofFloor && (
+                        <div style={{ borderTop: '1px solid #333', paddingTop: '10px', marginTop: '10px' }}>
+                          <h4 style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#ff8c00', textTransform: 'uppercase' }}>
+                            Internal Partition Walls
+                          </h4>
+                          
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
+                            {(floor.internalWalls || []).map((w, idx) => {
+                              const wLen = Math.sqrt(
+                                Math.pow(w.end[0] - w.start[0], 2) +
+                                Math.pow(w.end[1] - w.start[1], 2)
+                              );
+                              return (
+                                <div
+                                  key={w.id}
+                                  onClick={() => selectObject(w.id, 'wall')}
+                                  style={{
+                                    padding: '8px',
+                                    backgroundColor: '#1f1f1f',
+                                    border: `1px solid ${selectedId === w.id ? '#ff8c00' : '#333'}`,
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                  }}
+                                >
+                                  <div>
+                                    <div style={{ color: '#fff', fontSize: '11px', fontWeight: 600 }}>
+                                      Partition Wall {idx + 1}
+                                    </div>
+                                    <div style={{ fontSize: '9px', color: '#888' }}>
+                                      Length: {wLen.toFixed(2)}m | ({w.subObjects.length} doors)
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeInternalWall(floor.id, w.id);
+                                    }}
+                                    style={{
+                                      padding: '2px 6px',
+                                      backgroundColor: '#c62828',
+                                      color: '#fff',
+                                      fontSize: '9px',
+                                      border: 'none',
+                                      borderRadius: '3px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          <button
+                            onClick={() => addInternalWall(floor.id)}
+                            style={{
+                              width: '100%',
+                              padding: '6px',
+                              backgroundColor: '#ff8c00',
+                              color: '#000',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            + Add Partition Wall
+                          </button>
+                        </div>
+                      )}
                       </div>
                     </div>
                   );
