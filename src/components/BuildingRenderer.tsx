@@ -47,12 +47,16 @@ export default function BuildingRenderer() {
     const floorY = floor.level * heightPerFloor;
     const matProps = getMaterialProps(floor.id, 'floor', '#555555');
 
+    const wallThickness = floor.walls[0]?.thickness || 0.15;
+    const outerW = width + wallThickness;
+    const outerD = depth + wallThickness;
+
     // Build the 2D Shape of the floor footprint (X-Z plane, drawn in local X-Y)
     const floorShape = new Shape();
-    floorShape.moveTo(-width / 2, -depth / 2);
-    floorShape.lineTo(width / 2, -depth / 2);
-    floorShape.lineTo(width / 2, depth / 2);
-    floorShape.lineTo(-width / 2, depth / 2);
+    floorShape.moveTo(-outerW / 2, -outerD / 2);
+    floorShape.lineTo(outerW / 2, -outerD / 2);
+    floorShape.lineTo(outerW / 2, outerD / 2);
+    floorShape.lineTo(-outerW / 2, outerD / 2);
     floorShape.closePath();
 
     // Carve out a hole for the stairwell opening if it exists
@@ -150,15 +154,15 @@ export default function BuildingRenderer() {
 
     if (isTopFloor && isFlatRoof) {
       if (wall.id === 'wall-left') {
-        customHeight = heightPerFloor + (width / 2 - wall.thickness * 0.5) * Math.tan(angleRad);
+        customHeight = heightPerFloor + width * Math.tan(angleRad);
       } else if (wall.id === 'wall-right') {
-        customHeight = heightPerFloor - (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
+        customHeight = heightPerFloor;
       }
     }
 
     // Compute flat roof heights for front/back walls
-    const hLeft = heightPerFloor + (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
-    const hRight = heightPerFloor - (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
+    const hLeft = heightPerFloor + (width + wall.thickness) * Math.tan(angleRad);
+    const hRight = heightPerFloor;
 
     // Build the 2D Shape of the wall (along length and height)
     const wallShape = new Shape();
@@ -224,10 +228,11 @@ export default function BuildingRenderer() {
           const mode = uiState.seeThroughMode;
 
           // Layer definitions: [keySuffix, localZOffset, depth, defaultColor, defaultOpacity]
+          // Outer cladding is on the positive local Z side (+T/2), inner drywall is on the negative local Z side (-T/2)
           const layers = [
             {
               suffix: 'outer',
-              zOffset: -T / 2,
+              zOffset: T / 2 - T * 0.15,
               depth: T * 0.15,
               color: '#8b5a2b', // Wood siding brown
               opacity: mode === 'seeThrough' ? 0.15 : 1.0,
@@ -241,7 +246,7 @@ export default function BuildingRenderer() {
             },
             {
               suffix: 'inner',
-              zOffset: -T / 2 + T * 0.85,
+              zOffset: -T / 2,
               depth: T * 0.15,
               color: '#e6e6e6', // Drywall off-white
               opacity: mode === 'seeThrough' ? 0.5 : 1.0,
@@ -512,7 +517,7 @@ export default function BuildingRenderer() {
       
       return (
         <mesh
-          position={[0, topElevation + tVertical * 0.5, 0]}
+          position={[0, topElevation + (width / 2 + wallThickness / 2) * Math.tan(angleRad) + tVertical * 0.5, 0]}
           rotation={[0, 0, -angleRad]}
           castShadow
           receiveShadow
@@ -584,9 +589,9 @@ export default function BuildingRenderer() {
                 const isSelected = uiState.selectedId === 'roof';
                 const mode = uiState.seeThroughMode;
                 const layers = [
-                  { suffix: 'outer', zOffset: 0, depth: T * 0.15, color: '#8b5a2b', opacity: mode === 'seeThrough' ? 0.15 : 1.0 },
+                  { suffix: 'outer', zOffset: T * 0.85, depth: T * 0.15, color: '#8b5a2b', opacity: mode === 'seeThrough' ? 0.15 : 1.0 },
                   { suffix: 'middle', zOffset: T * 0.15, depth: T * 0.70, color: '#ded29e', opacity: mode === 'seeThrough' ? 0.25 : 1.0 },
-                  { suffix: 'inner', zOffset: T * 0.85, depth: T * 0.15, color: '#e6e6e6', opacity: mode === 'seeThrough' ? 0.5 : 1.0 }
+                  { suffix: 'inner', zOffset: 0, depth: T * 0.15, color: '#e6e6e6', opacity: mode === 'seeThrough' ? 0.5 : 1.0 }
                 ];
                 return (
                   <group position={[0, topElevation, depth / 2 - T / 2]} rotation={[0, 0, 0]}>
@@ -613,9 +618,9 @@ export default function BuildingRenderer() {
                 const isSelected = uiState.selectedId === 'roof';
                 const mode = uiState.seeThroughMode;
                 const layers = [
-                  { suffix: 'outer', zOffset: 0, depth: T * 0.15, color: '#8b5a2b', opacity: mode === 'seeThrough' ? 0.15 : 1.0 },
+                  { suffix: 'outer', zOffset: T * 0.85, depth: T * 0.15, color: '#8b5a2b', opacity: mode === 'seeThrough' ? 0.15 : 1.0 },
                   { suffix: 'middle', zOffset: T * 0.15, depth: T * 0.70, color: '#ded29e', opacity: mode === 'seeThrough' ? 0.25 : 1.0 },
-                  { suffix: 'inner', zOffset: T * 0.85, depth: T * 0.15, color: '#e6e6e6', opacity: mode === 'seeThrough' ? 0.5 : 1.0 }
+                  { suffix: 'inner', zOffset: 0, depth: T * 0.15, color: '#e6e6e6', opacity: mode === 'seeThrough' ? 0.5 : 1.0 }
                 ];
                 return (
                   <group position={[0, topElevation, -depth / 2 + T / 2]} rotation={[0, Math.PI, 0]}>
@@ -688,16 +693,53 @@ export default function BuildingRenderer() {
               if (member.type === 'header') woodColor = '#b58a5c'; // structural header color
               if (member.type === 'rafter' || member.type === 'ridge') woodColor = '#cd853f'; // rafters color
               
+              const wallMatch = member.id.match(/(floor-\d+-wall-(?:front|back|left|right))/);
+              const isSelected = uiState.selectedId && (
+                uiState.selectedId === member.id || 
+                (wallMatch && uiState.selectedId === wallMatch[1]) ||
+                (member.id.includes('roof') && uiState.selectedId === 'roof') ||
+                (member.id.includes('floor-') && uiState.selectedId === `floor-${member.id.match(/floor-.*?-(\d+)/)?.[1]}`)
+              );
+              
+              const memberColor = isSelected ? '#ff8c00' : woodColor;
+
+              const handleClick = (e: any) => {
+                e.stopPropagation();
+                if (wallMatch) {
+                  selectObject(wallMatch[1], 'wall');
+                } else if (member.id.includes('roof')) {
+                  selectObject('roof', 'roof');
+                } else {
+                  const fMatch = member.id.match(/floor-.*?-(\d+)/) || member.id.match(/floor-joist-(\d+)/) || member.id.match(/floor-opening-.*?-\d+-(\d+)/);
+                  if (fMatch) {
+                    selectObject(`floor-${fMatch[1]}`, 'floor');
+                  }
+                }
+              };
+
+              const handlePointerOver = (e: any) => {
+                e.stopPropagation();
+                document.body.style.cursor = 'pointer';
+              };
+              const handlePointerOut = (e: any) => {
+                e.stopPropagation();
+                document.body.style.cursor = 'default';
+              };
+
               return (
                 <mesh
                   key={member.id}
                   position={member.position}
                   rotation={member.rotation}
+                  rotationOrder="YXZ"
                   castShadow
                   receiveShadow
+                  onClick={handleClick}
+                  onPointerOver={handlePointerOver}
+                  onPointerOut={handlePointerOut}
                 >
                   <boxGeometry args={member.size} />
-                  <meshStandardMaterial color={woodColor} roughness={0.9} />
+                  <meshStandardMaterial color={memberColor} roughness={0.9} />
                 </mesh>
               );
             })}

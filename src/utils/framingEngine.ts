@@ -24,26 +24,30 @@ export function generateFraming(state: ProjectState): FramingMember[] {
     const joistHeight = 0.14; // 2x6 floor joists
     const joistThickness = 0.04;
     
+    const wallThickness = floor.walls[0]?.thickness || 0.15;
+    const outerW = width + wallThickness;
+    const outerD = depth + wallThickness;
+
     // Front and Back Rim Joists
     members.push({
       id: `floor-rim-front-${floor.level}`,
       type: 'joist',
-      position: [0, floorY - joistHeight / 2, depth / 2 - joistThickness / 2],
+      position: [0, floorY - joistHeight / 2, outerD / 2 - joistThickness / 2],
       rotation: [0, 0, 0],
-      size: [width, joistHeight, joistThickness],
+      size: [outerW, joistHeight, joistThickness],
     });
     members.push({
       id: `floor-rim-back-${floor.level}`,
       type: 'joist',
-      position: [0, floorY - joistHeight / 2, -depth / 2 + joistThickness / 2],
+      position: [0, floorY - joistHeight / 2, -outerD / 2 + joistThickness / 2],
       rotation: [0, 0, 0],
-      size: [width, joistHeight, joistThickness],
+      size: [outerW, joistHeight, joistThickness],
     });
 
     // Regular floor joists running along Z (depth)
     const joistSpacing = 0.4; // 40cm spacing
-    const halfWidth = width / 2;
-    const joistCount = Math.floor(width / joistSpacing) + 1;
+    const halfWidth = outerW / 2;
+    const joistCount = Math.floor(outerW / joistSpacing) + 1;
 
     for (let i = 0; i < joistCount; i++) {
       const joistX = -halfWidth + i * joistSpacing;
@@ -60,7 +64,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         const zEndOpening = opening.z + opening.depth / 2;
 
         // Front segment
-        const frontLength = (depth / 2 - joistThickness) - zEndOpening;
+        const frontLength = (outerD / 2 - joistThickness) - zEndOpening;
         if (frontLength > 0.1) {
           members.push({
             id: `floor-joist-${floor.level}-${i}-front`,
@@ -72,12 +76,12 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         }
 
         // Back segment
-        const backLength = zStartOpening - (-depth / 2 + joistThickness);
+        const backLength = zStartOpening - (-outerD / 2 + joistThickness);
         if (backLength > 0.1) {
           members.push({
             id: `floor-joist-${floor.level}-${i}-back`,
             type: 'joist',
-            position: [joistX, floorY - joistHeight / 2, -depth / 2 + joistThickness + backLength / 2],
+            position: [joistX, floorY - joistHeight / 2, -outerD / 2 + joistThickness + backLength / 2],
             rotation: [0, 0, 0],
             size: [joistThickness, joistHeight, backLength],
           });
@@ -89,7 +93,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
           type: 'joist',
           position: [joistX, floorY - joistHeight / 2, 0],
           rotation: [0, 0, 0],
-          size: [joistThickness, joistHeight, depth - joistThickness * 2],
+          size: [joistThickness, joistHeight, outerD - joistThickness * 2],
         });
       }
     }
@@ -146,12 +150,12 @@ export function generateFraming(state: ProjectState): FramingMember[] {
 
       if (isTopFloor && isFlatRoof) {
         if (wall.id === 'wall-left') {
-          wallBaseHeight = heightPerFloor + (width / 2 - wall.thickness * 0.5) * Math.tan(angleRad);
+          wallBaseHeight = heightPerFloor + width * Math.tan(angleRad);
         } else if (wall.id === 'wall-right') {
-          wallBaseHeight = heightPerFloor - (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
+          wallBaseHeight = heightPerFloor;
         } else if (wall.id === 'wall-front' || wall.id === 'wall-back') {
-          const hl = heightPerFloor + (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
-          const hr = heightPerFloor - (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
+          const hl = heightPerFloor + (width + wall.thickness) * Math.tan(angleRad);
+          const hr = heightPerFloor;
           hLeft = isBack ? hr : hl;
           hRight = isBack ? hl : hr;
         }
@@ -195,14 +199,14 @@ export function generateFraming(state: ProjectState): FramingMember[] {
           id: `wall-top-plate-1-${floor.id}-${wall.id}-${x1.toFixed(2)}`,
           type: 'plate',
           position: toWorld((x1 + x2) / 2, avgY - lumberThickness / 2, 0),
-          rotation: [slopeAngle, rotationY, 0],
+          rotation: [0, rotationY, slopeAngle],
           size: [segLen, lumberThickness, wall.thickness - 0.02],
         });
         members.push({
           id: `wall-top-plate-2-${floor.id}-${wall.id}-${x1.toFixed(2)}`,
           type: 'plate',
           position: toWorld((x1 + x2) / 2, avgY - lumberThickness * 1.5, 0),
-          rotation: [slopeAngle, rotationY, 0],
+          rotation: [0, rotationY, slopeAngle],
           size: [segLen, lumberThickness, wall.thickness - 0.02],
         });
       };
@@ -304,8 +308,8 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         // 1. King Studs (Full-height on both sides)
         const kingLeftX = xStart - lumberThickness - lumberThickness / 2;
         const kingRightX = xEnd + lumberThickness + lumberThickness / 2;
-        renderStud(`wall-stud-king-left-${obj.id}`, kingLeftX);
-        renderStud(`wall-stud-king-right-${obj.id}`, kingRightX);
+        renderStud(`wall-stud-king-left-${floor.id}-${wall.id}-${obj.id}`, kingLeftX);
+        renderStud(`wall-stud-king-right-${floor.id}-${wall.id}-${obj.id}`, kingRightX);
 
         // 2. Jack Studs (Support the header, height runs from bottom plate to bottom of header)
         const jackLeftX = xStart - lumberThickness / 2;
@@ -315,7 +319,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         // Left Jack stud
         const jackLeftHeight = headerBottomY - lumberThickness;
         members.push({
-          id: `wall-stud-jack-left-${obj.id}`,
+          id: `wall-stud-jack-left-${floor.id}-${wall.id}-${obj.id}`,
           type: 'stud',
           position: toWorld(jackLeftX, lumberThickness + jackLeftHeight / 2, 0),
           rotation: [0, rotationY, 0],
@@ -325,7 +329,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         // Right Jack stud
         const jackRightHeight = headerBottomY - lumberThickness;
         members.push({
-          id: `wall-stud-jack-right-${obj.id}`,
+          id: `wall-stud-jack-right-${floor.id}-${wall.id}-${obj.id}`,
           type: 'stud',
           position: toWorld(jackRightX, lumberThickness + jackRightHeight / 2, 0),
           rotation: [0, rotationY, 0],
@@ -336,7 +340,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         const headerWidth = obj.width + lumberThickness * 2;
         const headerThickness = 0.14; // 2x6 header depth
         members.push({
-          id: `wall-header-${obj.id}`,
+          id: `wall-header-${floor.id}-${wall.id}-${obj.id}`,
           type: 'header',
           position: toWorld(obj.position, yEnd + headerThickness / 2, 0),
           rotation: [0, rotationY, 0],
@@ -346,7 +350,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         // 4. Window Sill (if not a door)
         if (!isDoor) {
           members.push({
-            id: `wall-sill-${obj.id}`,
+            id: `wall-sill-${floor.id}-${wall.id}-${obj.id}`,
             type: 'sill',
             position: toWorld(obj.position, yStart - lumberThickness / 2, 0),
             rotation: [0, rotationY, 0],
@@ -361,7 +365,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
             const crippleHeight = yStart - lumberThickness * 2; // Between bottom plate and sill
             if (crippleHeight > 0.05) {
               members.push({
-                id: `wall-cripple-under-${i}-${obj.id}`,
+                id: `wall-cripple-under-${i}-${floor.id}-${wall.id}-${obj.id}`,
                 type: 'stud',
                 position: toWorld(cx, lumberThickness + crippleHeight / 2, 0),
                 rotation: [0, rotationY, 0],
@@ -382,7 +386,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
           for (let i = 0; i < aboveHeaderStuds; i++) {
             const cx = xStart + (i / Math.max(1, aboveHeaderStuds - 1)) * obj.width;
             members.push({
-              id: `wall-cripple-above-${i}-${obj.id}`,
+              id: `wall-cripple-above-${i}-${floor.id}-${wall.id}-${obj.id}`,
               type: 'stud',
               position: toWorld(cx, headerTopY + crippleAboveHeight / 2, 0),
               rotation: [0, rotationY, 0],
@@ -416,7 +420,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
       members.push({
         id: `roof-rafter-flat-${i}`,
         type: 'rafter',
-        position: [0, topElevation + (rafterHeight / 2) / Math.cos(angleRad), rz],
+        position: [0, topElevation + (width / 2 + wallThickness / 2) * Math.tan(angleRad) + (rafterHeight / 2) / Math.cos(angleRad), rz],
         rotation: [0, 0, -angleRad],
         size: [rafterLength, rafterHeight, rafterThickness],
       });
