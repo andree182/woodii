@@ -726,6 +726,41 @@ export default function BuildingRenderer() {
                 document.body.style.cursor = 'default';
               };
 
+              if (member.type === 'rafter') {
+                const L = member.size[0];
+                const H = member.size[1];
+                const rafterThickness = member.size[2];
+                const theta = member.rotation[2]; // Z rotation is the tilt angle
+
+                const rafterShape = new Shape();
+                const halfL = L / 2;
+                const halfH = H / 2;
+                const tanTheta = Math.tan(theta);
+
+                rafterShape.moveTo(-halfL - halfH * tanTheta, -halfH);
+                rafterShape.lineTo(halfL - halfH * tanTheta, -halfH);
+                rafterShape.lineTo(halfL + halfH * tanTheta, halfH);
+                rafterShape.lineTo(-halfL + halfH * tanTheta, halfH);
+                rafterShape.closePath();
+
+                return (
+                  <mesh
+                    key={member.id}
+                    position={[member.position[0], member.position[1], member.position[2] - rafterThickness / 2]}
+                    rotation={member.rotation}
+                    rotationOrder="YXZ"
+                    castShadow
+                    receiveShadow
+                    onClick={handleClick}
+                    onPointerOver={handlePointerOver}
+                    onPointerOut={handlePointerOut}
+                  >
+                    <extrudeGeometry args={[rafterShape, { depth: rafterThickness, bevelEnabled: false }]} />
+                    <meshStandardMaterial color={memberColor} roughness={0.9} />
+                  </mesh>
+                );
+              }
+
               return (
                 <mesh
                   key={member.id}
