@@ -1,4 +1,4 @@
-import { DoubleSide, Shape } from 'three';
+import { DoubleSide, Shape, Path, Plane, Vector3 } from 'three';
 import { useProjectStore } from '../store';
 import { Wall, Floor } from '../types';
 
@@ -8,6 +8,9 @@ export default function BuildingRenderer() {
   const roof = useProjectStore((state) => state.roof);
   const uiState = useProjectStore((state) => state.uiState);
   const selectObject = useProjectStore((state) => state.selectObject);
+  const startDragging = useProjectStore((state) => state.startDragging);
+  const stopDragging = useProjectStore((state) => state.stopDragging);
+  const updateDragPosition = useProjectStore((state) => state.updateDragPosition);
 
   const { width, depth, heightPerFloor } = dimensions;
   const totalFloors = floors.length;
@@ -77,133 +80,305 @@ export default function BuildingRenderer() {
     const wallId = `${floorId}-${wall.id}`;
     const matProps = getMaterialProps(wallId, 'wall', '#b0a090');
 
-    // Direction vector for placing sub-objects
-    const ux = dx / length;
-    const uz = dz / length;
-
     // Check if we need to apply flat roof slope adjustment to this wall
     const isTopFloor = level === totalFloors - 1;
     const isFlatRoof = roof.type === 'flat';
     const angleRad = (roof.inclination * Math.PI) / 180;
     
-    // Sloped wall specific calculations
-    let useSlopeGeometry = false;
-    let slopedWallShape: Shape | null = null;
     let customHeight = heightPerFloor;
-    let customCenterY = level * heightPerFloor + heightPerFloor / 2;
 
     if (isTopFloor && isFlatRoof) {
       if (wall.id === 'wall-left') {
         customHeight = heightPerFloor + (width / 2) * Math.tan(angleRad);
-        customCenterY = level * heightPerFloor + customHeight / 2;
       } else if (wall.id === 'wall-right') {
         customHeight = heightPerFloor - (width / 2) * Math.tan(angleRad);
-        customCenterY = level * heightPerFloor + customHeight / 2;
-      } else if (wall.id === 'wall-front' || wall.id === 'wall-back') {
-        useSlopeGeometry = true;
-        const halfWallW = length / 2;
-        const hLeft = heightPerFloor + (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
-        const hRight = heightPerFloor - (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
-
-        // Wall Back is mirror-inverted because its coordinates run in the opposite direction (from right to left)
-        const isBack = wall.id === 'wall-back';
-        const hStart = isBack ? hRight : hLeft;
-        const hEnd = isBack ? hLeft : hRight;
-
-        slopedWallShape = new Shape();
-        slopedWallShape.moveTo(-halfWallW, 0);
-        slopedWallShape.lineTo(halfWallW, 0);
-        slopedWallShape.lineTo(halfWallW, hEnd);
-        slopedWallShape.lineTo(-halfWallW, hStart);
-        slopedWallShape.closePath();
       }
     }
 
-    // Wall center coordinates
+    // Compute flat roof heights for front/back walls
+    const hLeft = heightPerFloor + (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
+    const hRight = heightPerFloor - (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
+
+    // Build the 2D Shape of the wall (along length and height)
+    const wallShape = new Shape();
+    wallShape.moveTo(0, 0);
+    wallShape.lineTo(length, 0);
+
+    let hStart = customHeight;
+    let hEnd = customHeight;
+    const isBack = wall.id === 'wall-back';
+
+    if (isTopFloor && isFlatRoof && (wall.id === 'wall-front' || wall.id === 'wall-back')) {
+      hStart = isBack ? hRight : hLeft;
+      hEnd = isBack ? hLeft : hRight;
+      
+      wallShape.lineTo(length, hEnd);
+      wallShape.lineTo(0, hStart);
+    } else {
+      wallShape.lineTo(length, customHeight);
+      wallShape.lineTo(0, customHeight);
+    }
+    wallShape.closePath();
+
+    // Add holes for each sub-object (door, window, opening)
+    wall.subObjects.forEach((obj) => {
+      const isDoor = obj.type === 'door';
+      const defaultElevation = isDoor ? 0 : (obj.type === 'window' ? 0.9 : 0);
+      const currentElevation = obj.elevation !== undefined ? obj.elevation : defaultElevation;
+      
+      // Calculate wall height at the object's position to clamp elevation
+      let localWallHeightAtObj = customHeight;
+      if (isTopFloor && isFlatRoof && (wall.id === 'wall-front' || wall.id === 'wall-back')) {
+        localWallHeightAtObj = isBack
+          ? hRight + obj.position * Math.tan(angleRad)
+          : hLeft - obj.position * Math.tan(angleRad);
+      }
+      const clampedElevation = Math.max(0, Math.min(Math.max(0, localWallHeightAtObj - obj.height), currentElevation));
+
+      const holePath = new Path();
+      const xStart = obj.position - obj.width / 2;
+      const xEnd = obj.position + obj.width / 2;
+      const yStart = clampedElevation;
+      const yEnd = clampedElevation + obj.height;
+
+      // Clockwise path definition to carve hole in CCW wallShape
+      holePath.moveTo(xStart, yStart);
+      holePath.lineTo(xStart, yEnd);
+      holePath.lineTo(xEnd, yEnd);
+      holePath.lineTo(xEnd, yStart);
+      holePath.closePath();
+
+      wallShape.holes.push(holePath);
+    });
+
     const wallCenterX = (startX + endX) / 2;
     const wallCenterZ = (startZ + endZ) / 2;
 
     return (
-      <group key={wallId}>
-        {/* Wall body */}
-        {useSlopeGeometry && slopedWallShape ? (
-          <group position={[wallCenterX, 0, wallCenterZ]} rotation={[0, rotationY, 0]}>
-            <mesh
-              position={[0, level * heightPerFloor, -wall.thickness / 2]}
-              castShadow
-              receiveShadow
-              onClick={(e) => {
+      <group key={wallId} position={[startX, level * heightPerFloor, startZ]} rotation={[0, rotationY, 0]}>
+        {/* Wall body with cutouts */}
+        <mesh
+          position={[0, 0, -wall.thickness / 2]}
+          castShadow
+          receiveShadow
+          onClick={(e) => {
+            e.stopPropagation();
+            selectObject(wallId, 'wall');
+          }}
+        >
+          <extrudeGeometry args={[wallShape, { depth: wall.thickness, bevelEnabled: false }]} />
+          <meshStandardMaterial {...matProps} roughness={0.7} />
+        </mesh>
+
+        {/* Drag handle for resizing wall depth/width */}
+        {uiState.selectedId === wallId && (
+          <mesh
+            position={[length / 2, customHeight / 2, wall.thickness / 2 + 0.2]}
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              startDragging(wallId, 'wallHandle');
+              e.target.setPointerCapture(e.pointerId);
+            }}
+            onPointerUp={(e) => {
+              e.stopPropagation();
+              stopDragging();
+              e.target.releasePointerCapture(e.pointerId);
+            }}
+            onPointerMove={(e) => {
+              if (uiState.isDragging && uiState.draggedId === wallId) {
                 e.stopPropagation();
-                selectObject(wallId, 'wall');
-              }}
-            >
-              <extrudeGeometry args={[slopedWallShape, { depth: wall.thickness, bevelEnabled: false }]} />
-              <meshStandardMaterial {...matProps} roughness={0.7} />
-            </mesh>
-          </group>
-        ) : (
-          <group
-            position={[wallCenterX, customCenterY, wallCenterZ]}
-            rotation={[0, rotationY, 0]}
+                const floorPlane = new Plane(new Vector3(0, 1, 0), -(level * heightPerFloor + customHeight / 2));
+                const intersection = new Vector3();
+                e.ray.intersectPlane(floorPlane, intersection);
+                updateDragPosition([intersection.x, intersection.y, intersection.z]);
+              }
+            }}
+            onPointerOver={(e) => {
+              e.stopPropagation();
+              document.body.style.cursor = 'ew-resize';
+            }}
+            onPointerOut={(e) => {
+              e.stopPropagation();
+              document.body.style.cursor = 'default';
+            }}
           >
-            <mesh
-              castShadow
-              receiveShadow
-              onClick={(e) => {
-                e.stopPropagation();
-                selectObject(wallId, 'wall');
-              }}
-            >
-              <boxGeometry args={[length, customHeight, wall.thickness]} />
-              <meshStandardMaterial {...matProps} roughness={0.7} />
-            </mesh>
-          </group>
+            <sphereGeometry args={[0.12, 16, 16]} />
+            <meshStandardMaterial color="#ff8c00" emissive="#ff8c00" emissiveIntensity={0.5} roughness={0.3} />
+          </mesh>
         )}
 
-        {/* Sub-objects (windows and doors) */}
+        {/* Sub-objects (windows, doors, openings) nested in wall space */}
         {wall.subObjects.map((obj) => {
-          // Object 2D position along the wall
-          const objX = startX + ux * obj.position;
-          const objZ = startZ + uz * obj.position;
-          
-          // Y positioning: doors touch the floor, windows are centered or elevated
           const isDoor = obj.type === 'door';
-          let localWallHeight = customHeight;
+          const isWindow = obj.type === 'window';
+          const isOpening = obj.type === 'opening';
 
+          const defaultElevation = isDoor ? 0 : (isWindow ? 0.9 : 0);
+          const currentElevation = obj.elevation !== undefined ? obj.elevation : defaultElevation;
+          
+          let localWallHeightAtObj = customHeight;
           if (isTopFloor && isFlatRoof && (wall.id === 'wall-front' || wall.id === 'wall-back')) {
-            const isBack = wall.id === 'wall-back';
-            const hLeft = heightPerFloor + (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
-            const hRight = heightPerFloor - (width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
-            localWallHeight = isBack
+            localWallHeightAtObj = isBack
               ? hRight + obj.position * Math.tan(angleRad)
               : hLeft - obj.position * Math.tan(angleRad);
           }
-
-          const objY = level * heightPerFloor + (isDoor ? obj.height / 2 : localWallHeight / 2);
+          const clampedElevation = Math.max(0, Math.min(Math.max(0, localWallHeightAtObj - obj.height), currentElevation));
           
+          const localY = clampedElevation + obj.height / 2;
           const objId = obj.id;
-          const objMatProps = getMaterialProps(objId, 'subObject', obj.color || '#a0d0f0');
+
+          const defaultColor = isOpening ? '#222222' : (obj.color || '#a0d0f0');
+          const objMatProps = getMaterialProps(objId, 'subObject', defaultColor);
+          
+          if (isOpening) {
+            objMatProps.transparent = true;
+            objMatProps.opacity = uiState.selectedId === objId ? 0.3 : 0.0;
+            objMatProps.depthWrite = false;
+          } else if (isWindow) {
+            objMatProps.transparent = true;
+            objMatProps.opacity = uiState.selectedId === objId ? 0.8 : 0.4;
+          }
 
           return (
-            <mesh
+            <group
               key={objId}
-              position={[objX, objY, objZ]}
-              rotation={[0, rotationY, 0]}
-              castShadow
-              receiveShadow
-              onClick={(e) => {
-                e.stopPropagation();
-                selectObject(objId, 'subObject');
-              }}
+              position={[obj.position, localY, 0]}
             >
-              {/* Box representation for Phase 2 */}
-              <boxGeometry args={[obj.width, obj.height, wall.thickness + 0.04]} />
-              <meshStandardMaterial 
-                {...objMatProps} 
-                roughness={0.3} 
-                metalness={obj.type === 'window' ? 0.9 : 0.1}
-              />
-            </mesh>
+              {/* Raycast block for selection and dragging */}
+              <mesh
+                castShadow={false}
+                receiveShadow={false}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  selectObject(objId, 'subObject');
+                }}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  selectObject(objId, 'subObject');
+                  startDragging(objId, 'subObject');
+                  e.target.setPointerCapture(e.pointerId);
+                }}
+                onPointerUp={(e) => {
+                  e.stopPropagation();
+                  stopDragging();
+                  e.target.releasePointerCapture(e.pointerId);
+                }}
+                onPointerMove={(e) => {
+                  if (uiState.isDragging && uiState.draggedId === objId) {
+                    e.stopPropagation();
+                    const normal = new Vector3(-dz, 0, dx).normalize();
+                    const wallPlane = new Plane().setFromNormalAndCoplanarPoint(
+                      normal,
+                      new Vector3(wallCenterX, 0, wallCenterZ)
+                    );
+                    const intersection = new Vector3();
+                    e.ray.intersectPlane(wallPlane, intersection);
+                    updateDragPosition([intersection.x, intersection.y, intersection.z]);
+                  }
+                }}
+                onPointerOver={(e) => {
+                  e.stopPropagation();
+                  document.body.style.cursor = 'move';
+                }}
+                onPointerOut={(e) => {
+                  e.stopPropagation();
+                  document.body.style.cursor = 'default';
+                }}
+              >
+                <boxGeometry args={[obj.width, obj.height, wall.thickness + 0.04]} />
+                <meshStandardMaterial 
+                  {...objMatProps} 
+                  roughness={0.3} 
+                  metalness={isWindow ? 0.9 : 0.1}
+                />
+              </mesh>
+
+              {/* Rendering Opening Border Frame */}
+              {isOpening && (
+                <group>
+                  {/* Top Bar */}
+                  <mesh position={[0, obj.height / 2 - 0.02, 0]}>
+                    <boxGeometry args={[obj.width, 0.04, wall.thickness + 0.02]} />
+                    <meshStandardMaterial color={uiState.selectedId === objId ? '#ff8c00' : '#444444'} roughness={0.7} />
+                  </mesh>
+                  {/* Bottom Bar */}
+                  <mesh position={[0, -obj.height / 2 + 0.02, 0]}>
+                    <boxGeometry args={[obj.width, 0.04, wall.thickness + 0.02]} />
+                    <meshStandardMaterial color={uiState.selectedId === objId ? '#ff8c00' : '#444444'} roughness={0.7} />
+                  </mesh>
+                  {/* Left Bar */}
+                  <mesh position={[-obj.width / 2 + 0.02, 0, 0]}>
+                    <boxGeometry args={[0.04, obj.height - 0.08, wall.thickness + 0.02]} />
+                    <meshStandardMaterial color={uiState.selectedId === objId ? '#ff8c00' : '#444444'} roughness={0.7} />
+                  </mesh>
+                  {/* Right Bar */}
+                  <mesh position={[obj.width / 2 - 0.02, 0, 0]}>
+                    <boxGeometry args={[0.04, obj.height - 0.08, wall.thickness + 0.02]} />
+                    <meshStandardMaterial color={uiState.selectedId === objId ? '#ff8c00' : '#444444'} roughness={0.7} />
+                  </mesh>
+                </group>
+              )}
+
+              {/* Rendering Window Glass & Frame */}
+              {isWindow && (
+                <group>
+                  {/* Frame */}
+                  {/* Top Bar */}
+                  <mesh position={[0, obj.height / 2 - 0.04, 0]}>
+                    <boxGeometry args={[obj.width, 0.08, wall.thickness + 0.02]} />
+                    <meshStandardMaterial color={uiState.selectedId === objId ? '#ff8c00' : '#eeeeee'} roughness={0.5} />
+                  </mesh>
+                  {/* Bottom Bar */}
+                  <mesh position={[0, -obj.height / 2 + 0.04, 0]}>
+                    <boxGeometry args={[obj.width, 0.08, wall.thickness + 0.02]} />
+                    <meshStandardMaterial color={uiState.selectedId === objId ? '#ff8c00' : '#eeeeee'} roughness={0.5} />
+                  </mesh>
+                  {/* Left Bar */}
+                  <mesh position={[-obj.width / 2 + 0.04, 0, 0]}>
+                    <boxGeometry args={[0.08, obj.height - 0.16, wall.thickness + 0.02]} />
+                    <meshStandardMaterial color={uiState.selectedId === objId ? '#ff8c00' : '#eeeeee'} roughness={0.5} />
+                  </mesh>
+                  {/* Right Bar */}
+                  <mesh position={[obj.width / 2 - 0.04, 0, 0]}>
+                    <boxGeometry args={[0.08, obj.height - 0.16, wall.thickness + 0.02]} />
+                    <meshStandardMaterial color={uiState.selectedId === objId ? '#ff8c00' : '#eeeeee'} roughness={0.5} />
+                  </mesh>
+                  {/* Glass Pane */}
+                  <mesh position={[0, 0, 0]}>
+                    <boxGeometry args={[obj.width - 0.08, obj.height - 0.08, 0.02]} />
+                    <meshStandardMaterial color="#a0d0f0" transparent opacity={0.4} roughness={0.1} metalness={0.9} />
+                  </mesh>
+                </group>
+              )}
+
+              {/* Rendering Door Panel & Frame */}
+              {isDoor && (
+                <group>
+                  {/* Frame */}
+                  {/* Top Bar */}
+                  <mesh position={[0, obj.height / 2 - 0.02, 0]}>
+                    <boxGeometry args={[obj.width, 0.04, wall.thickness + 0.02]} />
+                    <meshStandardMaterial color={uiState.selectedId === objId ? '#ff8c00' : '#333333'} roughness={0.5} />
+                  </mesh>
+                  {/* Left Bar */}
+                  <mesh position={[-obj.width / 2 + 0.02, 0, 0]}>
+                    <boxGeometry args={[0.04, obj.height - 0.04, wall.thickness + 0.02]} />
+                    <meshStandardMaterial color={uiState.selectedId === objId ? '#ff8c00' : '#333333'} roughness={0.5} />
+                  </mesh>
+                  {/* Right Bar */}
+                  <mesh position={[obj.width / 2 - 0.02, 0, 0]}>
+                    <boxGeometry args={[0.04, obj.height - 0.04, wall.thickness + 0.02]} />
+                    <meshStandardMaterial color={uiState.selectedId === objId ? '#ff8c00' : '#333333'} roughness={0.5} />
+                  </mesh>
+                  {/* Door Panel */}
+                  <mesh position={[0, 0, 0]}>
+                    <boxGeometry args={[obj.width - 0.04, obj.height - 0.04, 0.04]} />
+                    <meshStandardMaterial color={uiState.selectedId === objId ? '#ff8c00' : (obj.color || '#8B4513')} roughness={0.8} />
+                  </mesh>
+                </group>
+              )}
+            </group>
           );
         })}
       </group>
@@ -286,18 +461,18 @@ export default function BuildingRenderer() {
             <meshStandardMaterial {...matProps} roughness={0.5} />
           </mesh>
 
-          {/* Gable walls (flat triangular front and back closures) */}
+          {/* Gable walls (3D extruded triangular closures) */}
           {!matProps.wireframe && (
             <>
               {/* Front Gable */}
-              <mesh position={[0, topElevation, depth / 2]} rotation={[0, 0, 0]}>
-                <shapeGeometry args={[gableShape]} />
-                <meshStandardMaterial color="#b0a090" roughness={0.7} side={DoubleSide} />
+              <mesh position={[0, topElevation, depth / 2 - wallThickness / 2]} rotation={[0, 0, 0]} castShadow receiveShadow>
+                <extrudeGeometry args={[gableShape, { depth: wallThickness, bevelEnabled: false }]} />
+                <meshStandardMaterial color="#b0a090" roughness={0.7} />
               </mesh>
               {/* Back Gable */}
-              <mesh position={[0, topElevation, -depth / 2]} rotation={[0, Math.PI, 0]}>
-                <shapeGeometry args={[gableShape]} />
-                <meshStandardMaterial color="#b0a090" roughness={0.7} side={DoubleSide} />
+              <mesh position={[0, topElevation, -depth / 2 + wallThickness / 2]} rotation={[0, Math.PI, 0]} castShadow receiveShadow>
+                <extrudeGeometry args={[gableShape, { depth: wallThickness, bevelEnabled: false }]} />
+                <meshStandardMaterial color="#b0a090" roughness={0.7} />
               </mesh>
             </>
           )}

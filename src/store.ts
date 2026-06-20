@@ -71,9 +71,14 @@ interface ProjectStore extends ProjectState {
   
   // Custom functions to add/modify objects
   updateSubObject: (wallId: string, subObjectId: string, updates: Partial<any>) => void;
-  addSubObject: (wallId: string, type: 'window' | 'door') => void;
+  addSubObject: (wallId: string, type: 'window' | 'door' | 'opening') => void;
   removeSubObject: (wallId: string, subObjectId: string) => void;
   resetProject: () => void;
+
+  // Dragging actions
+  startDragging: (id: string, type: 'subObject' | 'wallHandle') => void;
+  stopDragging: () => void;
+  updateDragPosition: (point: [number, number, number]) => void;
 }
 
 const INITIAL_PROJECT_STATE = {
@@ -95,6 +100,9 @@ const INITIAL_PROJECT_STATE = {
     selectedType: null,
     seeThroughMode: 'solid' as const,
     currentFloorView: -1, // -1 means see all floors
+    isDragging: false,
+    draggedId: null,
+    draggedType: null,
   }
 };
 
@@ -220,8 +228,9 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       type,
       position: 1.0, // Default offset
       width: type === 'door' ? 0.9 : 1.0,
-      height: type === 'door' ? 2.0 : 1.0,
-      color: type === 'door' ? '#8B4513' : '#ffffff',
+      height: type === 'window' ? 1.0 : 2.0,
+      elevation: type === 'window' ? 0.9 : 0,
+      color: type === 'door' ? '#8B4513' : type === 'opening' ? '#222222' : '#ffffff',
     };
 
     const updatedFloors = state.floors.map(floor => ({
@@ -264,6 +273,182 @@ export const useProjectStore = create<ProjectStore>((set) => ({
         selectedType: state.uiState.selectedId === subObjectId ? null : state.uiState.selectedType
       }
     };
+  }),
+
+  startDragging: (id, type) => set((state) => ({
+    uiState: {
+      ...state.uiState,
+      isDragging: true,
+      draggedId: id,
+      draggedType: type,
+    }
+  })),
+
+  stopDragging: () => set((state) => ({
+    uiState: {
+      ...state.uiState,
+      isDragging: false,
+      draggedId: null,
+      draggedType: null,
+    }
+  })),
+
+  updateDragPosition: (point) => set((state) => {
+    const { draggedId, draggedType } = state.uiState;
+    if (!draggedId || !draggedType) return {};
+
+    if (draggedType === 'subObject') {
+      let foundFloor: Floor | null = null;
+      let foundWall: Wall | null = null;
+      let foundObj: SubObject | null = null;
+      
+      for (const floor of state.floors) {
+        for (const wall of floor.walls) {
+          const obj = wall.subObjects.find(o => o.id === draggedId);
+          if (obj) {
+            foundFloor = floor;
+            foundWall = wall;
+            foundObj = obj;
+            break;
+          }
+        }
+      }
+
+      if (!foundFloor || !foundWall || !foundObj) return {};
+
+      const startX = foundWall.start[0];
+      const startZ = foundWall.start[1];
+      const endX = foundWall.end[0];
+      const endZ = foundWall.end[1];
+
+      const dx = endX - startX;
+      const dz = endZ - startZ;
+      const length = Math.sqrt(dx * dx + dz * dz);
+      const ux = dx / length;
+      const uz = dz / length;
+
+      const [x, y, z] = point;
+      const vx = x - startX;
+      const vz = z - startZ;
+      const pos = vx * ux + vz * uz;
+
+      const halfW = foundObj.width / 2;
+      const clampedPos = Math.max(halfW, Math.min(length - halfW, pos));
+
+      let clampedElevation = undefined;
+      if (foundObj.type !== 'door') {
+        const level = foundFloor.level;
+        const localY = y - level * state.dimensions.heightPerFloor;
+        const targetElevation = localY - foundObj.height / 2;
+
+        const isTopFloor = level === state.floors.length - 1;
+        const isFlatRoof = state.roof.type === 'flat';
+        const angleRad = (state.roof.inclination * Math.PI) / 180;
+        let localWallHeight = state.dimensions.heightPerFloor;
+        
+        if (isTopFloor && isFlatRoof) {
+          if (foundWall.id === 'wall-left') {
+            localWallHeight = state.dimensions.heightPerFloor + (state.dimensions.width / 2) * Math.tan(angleRad);
+          } else if (foundWall.id === 'wall-right') {
+            localWallHeight = state.dimensions.heightPerFloor - (state.dimensions.width / 2) * Math.tan(angleRad);
+          } else if (foundWall.id === 'wall-front' || foundWall.id === 'wall-back') {
+            const isBack = foundWall.id === 'wall-back';
+            const hLeft = state.dimensions.heightPerFloor + (state.dimensions.width / 2 + foundWall.thickness * 0.5) * Math.tan(angleRad);
+            const hRight = state.dimensions.heightPerFloor - (state.dimensions.width / 2 + foundWall.thickness * 0.5) * Math.tan(angleRad);
+            localWallHeight = isBack
+              ? hRight + clampedPos * Math.tan(angleRad)
+              : hLeft - clampedPos * Math.tan(angleRad);
+          }
+        }
+
+        const maxElevation = localWallHeight - foundObj.height;
+        clampedElevation = Math.max(0, Math.min(Math.max(0, maxElevation), targetElevation));
+      }
+
+      const updatedFloors = state.floors.map(floor => {
+        if (floor.id !== foundFloor!.id) return floor;
+        return {
+          ...floor,
+          walls: floor.walls.map(wall => {
+            if (wall.id !== foundWall!.id) return wall;
+            return {
+              ...wall,
+              subObjects: wall.subObjects.map(obj => 
+                obj.id === draggedId 
+                  ? { 
+                      ...obj, 
+                      position: clampedPos,
+                      ...(clampedElevation !== undefined ? { elevation: clampedElevation } : {}) 
+                    } 
+                  : obj
+              )
+            };
+          })
+        };
+      });
+
+      return { floors: updatedFloors };
+    } else if (draggedType === 'wallHandle') {
+      const [x, , z] = point;
+      if (draggedId.endsWith('wall-front') || draggedId.endsWith('wall-back')) {
+        const newDepth = Math.round(Math.max(1.5, Math.min(15, Math.abs(z) * 2)) * 10) / 10;
+        const newDims = { ...state.dimensions, depth: newDepth };
+        return {
+          dimensions: newDims,
+          floors: state.floors.map(floor => {
+            const defaultWalls = createOuterWalls(newDims.width, newDims.depth, 0.15, floor.level);
+            return {
+              ...floor,
+              walls: defaultWalls.map(newWall => {
+                const matchingExisting = floor.walls.find(w => w.id === newWall.id);
+                if (matchingExisting) {
+                  const wallLength = Math.sqrt(
+                    Math.pow(newWall.end[0] - newWall.start[0], 2) +
+                    Math.pow(newWall.end[1] - newWall.start[1], 2)
+                  );
+                  const adjustedSubObjects = matchingExisting.subObjects.map(obj => {
+                    const maxPos = wallLength - obj.width / 2;
+                    const newPos = Math.min(Math.max(obj.width / 2, obj.position), maxPos);
+                    return { ...obj, position: newPos };
+                  });
+                  return { ...newWall, subObjects: adjustedSubObjects };
+                }
+                return newWall;
+              })
+            };
+          })
+        };
+      } else if (draggedId.endsWith('wall-left') || draggedId.endsWith('wall-right')) {
+        const newWidth = Math.round(Math.max(1.5, Math.min(15, Math.abs(x) * 2)) * 10) / 10;
+        const newDims = { ...state.dimensions, width: newWidth };
+        return {
+          dimensions: newDims,
+          floors: state.floors.map(floor => {
+            const defaultWalls = createOuterWalls(newDims.width, newDims.depth, 0.15, floor.level);
+            return {
+              ...floor,
+              walls: defaultWalls.map(newWall => {
+                const matchingExisting = floor.walls.find(w => w.id === newWall.id);
+                if (matchingExisting) {
+                  const wallLength = Math.sqrt(
+                    Math.pow(newWall.end[0] - newWall.start[0], 2) +
+                    Math.pow(newWall.end[1] - newWall.start[1], 2)
+                  );
+                  const adjustedSubObjects = matchingExisting.subObjects.map(obj => {
+                    const maxPos = wallLength - obj.width / 2;
+                    const newPos = Math.min(Math.max(obj.width / 2, obj.position), maxPos);
+                    return { ...obj, position: newPos };
+                  });
+                  return { ...newWall, subObjects: adjustedSubObjects };
+                }
+                return newWall;
+              })
+            };
+          })
+        };
+      }
+    }
+    return {};
   }),
 
   resetProject: () => set(() => ({

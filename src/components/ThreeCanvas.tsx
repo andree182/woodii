@@ -6,6 +6,7 @@ import BuildingRenderer from './BuildingRenderer';
 
 export default function ThreeCanvas() {
   const selectObject = useProjectStore((state) => state.selectObject);
+  const isDragging = useProjectStore((state) => state.uiState.isDragging);
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', background: '#1a1a1a' }}>
@@ -28,7 +29,7 @@ export default function ThreeCanvas() {
           <BuildingRenderer />
         </Suspense>
 
-        <OrbitControls makeDefault maxPolarAngle={Math.PI / 2 - 0.05} minDistance={2} maxDistance={30} />
+        <OrbitControls makeDefault enabled={!isDragging} maxPolarAngle={Math.PI / 2 - 0.05} minDistance={2} maxDistance={30} />
         
         {/* Ground grid for architectural scale */}
         <Grid

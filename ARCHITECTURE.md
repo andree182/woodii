@@ -47,10 +47,11 @@ interface Wall {
 
 interface SubObject {
   id: string;
-  type: 'window' | 'door';
+  type: 'window' | 'door' | 'opening';
   position: number; // offset along the wall
   width: number;
   height: number;
+  elevation?: number; // vertical height offset from floor in meters
   color?: string;
 }
 

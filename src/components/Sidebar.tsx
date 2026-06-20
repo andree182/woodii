@@ -323,11 +323,11 @@ export default function Sidebar() {
                   <p style={{ margin: 0, fontSize: '12px', color: '#aaa' }}>
                     Wall coordinates: [{selectedWall.start.join(', ')}] to [{selectedWall.end.join(', ')}]
                   </p>
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
                     <button
                       onClick={() => addSubObject(selectedWall.id, 'door')}
                       style={{
-                        flex: 1,
+                        flex: '1 1 0px',
                         padding: '6px',
                         backgroundColor: '#ff8c00',
                         color: '#000',
@@ -335,7 +335,8 @@ export default function Sidebar() {
                         fontWeight: 600,
                         border: 'none',
                         borderRadius: '4px',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        minWidth: '75px'
                       }}
                     >
                       + Door
@@ -343,7 +344,7 @@ export default function Sidebar() {
                     <button
                       onClick={() => addSubObject(selectedWall.id, 'window')}
                       style={{
-                        flex: 1,
+                        flex: '1 1 0px',
                         padding: '6px',
                         backgroundColor: '#ff8c00',
                         color: '#000',
@@ -351,10 +352,28 @@ export default function Sidebar() {
                         fontWeight: 600,
                         border: 'none',
                         borderRadius: '4px',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        minWidth: '75px'
                       }}
                     >
                       + Window
+                    </button>
+                    <button
+                      onClick={() => addSubObject(selectedWall.id, 'opening')}
+                      style={{
+                        flex: '1 1 0px',
+                        padding: '6px',
+                        backgroundColor: '#ff8c00',
+                        color: '#000',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        minWidth: '75px'
+                      }}
+                    >
+                      + Opening
                     </button>
                   </div>
                 </div>
@@ -419,6 +438,28 @@ export default function Sidebar() {
                       }}
                     />
                   </div>
+
+                  {selectedSubObj.type !== 'door' && (
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Elevation (m)</label>
+                      <input
+                        type="number"
+                        step="0.05"
+                        min="0"
+                        value={selectedSubObj.elevation !== undefined ? selectedSubObj.elevation : (selectedSubObj.type === 'window' ? 0.9 : 0)}
+                        onChange={(e) => updateSubObject(parentWallIdOfSubObj, selectedSubObj.id, { elevation: parseFloat(e.target.value) })}
+                        style={{
+                          width: '100%',
+                          padding: '6px',
+                          backgroundColor: '#121212',
+                          border: '1px solid #333',
+                          borderRadius: '4px',
+                          color: '#e0e0e0',
+                          fontSize: '12px'
+                        }}
+                      />
+                    </div>
+                  )}
 
                   <button
                     onClick={() => removeSubObject(parentWallIdOfSubObj, selectedSubObj.id)}

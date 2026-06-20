@@ -8,10 +8,11 @@ export interface Dimensions {
 
 export interface SubObject {
   id: string;
-  type: 'window' | 'door';
+  type: 'window' | 'door' | 'opening';
   position: number; // offset from start of wall in meters
   width: number;
   height: number;
+  elevation?: number; // vertical height offset from floor in meters (default 0 for doors)
   color?: string;
 }
 
@@ -48,6 +49,9 @@ export interface UIState {
   selectedType: 'wall' | 'subObject' | 'roof' | 'floor' | null;
   seeThroughMode: 'solid' | 'seeThrough' | 'studsOnly';
   currentFloorView: number; // Active floor to edit / view (-1 for all)
+  isDragging: boolean;
+  draggedId: string | null;
+  draggedType: 'subObject' | 'wallHandle' | null;
 }
 
 export interface ProjectState {
