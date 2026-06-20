@@ -84,7 +84,7 @@ export default function Sidebar() {
         if (found) {
           selectedSubObj = found;
           selectedWall = wall;
-          parentWallIdOfSubObj = wall.id;
+          parentWallIdOfSubObj = `${floor.id}-${wall.id}`;
           break;
         }
       }
@@ -454,7 +454,7 @@ export default function Sidebar() {
                     </p>
                     <div style={{ display: 'flex', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
                       <button
-                        onClick={() => addSubObject(selectedWall.id, 'door')}
+                        onClick={() => addSubObject(selectedId, 'door')}
                         style={{
                           flex: '1 1 0px',
                           padding: '6px',
@@ -471,7 +471,7 @@ export default function Sidebar() {
                         + Door
                       </button>
                       <button
-                        onClick={() => addSubObject(selectedWall.id, 'window')}
+                        onClick={() => addSubObject(selectedId, 'window')}
                         style={{
                           flex: '1 1 0px',
                           padding: '6px',
@@ -488,7 +488,7 @@ export default function Sidebar() {
                         + Window
                       </button>
                       <button
-                        onClick={() => addSubObject(selectedWall.id, 'opening')}
+                        onClick={() => addSubObject(selectedId, 'opening')}
                         style={{
                           flex: '1 1 0px',
                           padding: '6px',

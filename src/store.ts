@@ -147,9 +147,16 @@ export const useProjectStore = create<ProjectStore>((set) => ({
             Math.pow(newWall.end[1] - newWall.start[1], 2)
           );
           const adjustedSubObjects = matchingExisting.subObjects.map(obj => {
-            const maxPos = wallLength - obj.width / 2;
-            const newPos = Math.min(Math.max(obj.width / 2, obj.position), maxPos);
-            return { ...obj, position: newPos };
+            const wallThickness = newWall.thickness;
+            const maxWidth = Math.max(0.1, wallLength - 2 * wallThickness);
+            const clampedWidth = Math.min(maxWidth, obj.width);
+            const halfW = clampedWidth / 2;
+            const minPos = halfW + wallThickness;
+            const maxPos = wallLength - halfW - wallThickness;
+            const clampedPos = maxPos >= minPos
+              ? Math.max(minPos, Math.min(maxPos, obj.position))
+              : wallLength / 2;
+            return { ...obj, width: clampedWidth, position: clampedPos };
           });
           return { ...newWall, subObjects: adjustedSubObjects };
         }
@@ -247,43 +254,101 @@ export const useProjectStore = create<ProjectStore>((set) => ({
   })),
 
   updateSubObject: (wallId, subObjectId, updates) => set((state) => {
-    const updatedFloors = state.floors.map(floor => ({
-      ...floor,
-      walls: floor.walls.map(wall => {
-        if (wall.id !== wallId) return wall;
-        return {
-          ...wall,
-          subObjects: wall.subObjects.map(obj => 
-            obj.id === subObjectId ? { ...obj, ...updates } : obj
-          )
-        };
-      })
-    }));
+    const floorId = wallId.includes('floor-') ? wallId.substring(0, wallId.indexOf('-wall-')) : null;
+    const cleanWallId = wallId.includes('floor-') ? wallId.substring(wallId.indexOf('wall-')) : wallId;
+
+    const updatedFloors = state.floors.map(floor => {
+      if (floorId && floor.id !== floorId) return floor;
+      return {
+        ...floor,
+        walls: floor.walls.map(wall => {
+          if (wall.id !== cleanWallId) return wall;
+
+          // Calculate wall length
+          const startX = wall.start[0];
+          const startZ = wall.start[1];
+          const endX = wall.end[0];
+          const endZ = wall.end[1];
+          const length = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endZ - startZ, 2));
+
+          return {
+            ...wall,
+            subObjects: wall.subObjects.map(obj => {
+              if (obj.id !== subObjectId) return obj;
+
+              const merged = { ...obj, ...updates };
+              const wallThickness = wall.thickness;
+              const maxWidth = Math.max(0.1, length - 2 * wallThickness);
+              const clampedWidth = Math.min(maxWidth, merged.width);
+              const halfW = clampedWidth / 2;
+
+              // Clamp position so it doesn't overlap with side corner stands (clearance = wallThickness)
+              const minPos = halfW + wallThickness;
+              const maxPos = length - halfW - wallThickness;
+
+              const clampedPos = maxPos >= minPos
+                ? Math.max(minPos, Math.min(maxPos, merged.position))
+                : length / 2;
+
+              return { ...merged, width: clampedWidth, position: clampedPos };
+            })
+          };
+        })
+      };
+    });
     return { floors: updatedFloors };
   }),
 
   addSubObject: (wallId, type) => set((state) => {
-    const id = `${type}-${Date.now()}`;
-    const defaultObj = {
-      id,
-      type,
-      position: 1.0, // Default offset
-      width: type === 'door' ? 0.9 : 1.0,
-      height: type === 'window' ? 1.0 : 2.0,
-      elevation: type === 'window' ? 0.9 : 0,
-      color: type === 'door' ? '#8B4513' : type === 'opening' ? '#222222' : '#ffffff',
-    };
+    const floorId = wallId.includes('floor-') ? wallId.substring(0, wallId.indexOf('-wall-')) : null;
+    const cleanWallId = wallId.includes('floor-') ? wallId.substring(wallId.indexOf('wall-')) : wallId;
 
-    const updatedFloors = state.floors.map(floor => ({
-      ...floor,
-      walls: floor.walls.map(wall => {
-        if (wall.id !== wallId) return wall;
-        return {
-          ...wall,
-          subObjects: [...wall.subObjects, defaultObj]
-        };
-      })
-    }));
+    const id = `${type}-${Date.now()}`;
+    const widthVal = type === 'door' ? 0.9 : 1.0;
+    const heightVal = type === 'window' ? 1.0 : 2.0;
+
+    const updatedFloors = state.floors.map(floor => {
+      if (floorId && floor.id !== floorId) return floor;
+      return {
+        ...floor,
+        walls: floor.walls.map(wall => {
+          if (wall.id !== cleanWallId) return wall;
+
+          // Calculate wall length
+          const startX = wall.start[0];
+          const startZ = wall.start[1];
+          const endX = wall.end[0];
+          const endZ = wall.end[1];
+          const length = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endZ - startZ, 2));
+
+          const halfW = widthVal / 2;
+          const wallThickness = wall.thickness;
+
+          // Clamp starting position away from side corner stands
+          const minPos = halfW + wallThickness;
+          const maxPos = length - halfW - wallThickness;
+
+          const clampedPos = maxPos >= minPos
+            ? Math.max(minPos, Math.min(maxPos, 1.0))
+            : length / 2;
+
+          const defaultObj = {
+            id,
+            type,
+            position: clampedPos,
+            width: widthVal,
+            height: heightVal,
+            elevation: type === 'window' ? 0.9 : 0,
+            color: type === 'door' ? '#8B4513' : type === 'opening' ? '#222222' : '#ffffff',
+          };
+
+          return {
+            ...wall,
+            subObjects: [...wall.subObjects, defaultObj]
+          };
+        })
+      };
+    });
 
     return { 
       floors: updatedFloors,
@@ -296,16 +361,23 @@ export const useProjectStore = create<ProjectStore>((set) => ({
   }),
 
   removeSubObject: (wallId, subObjectId) => set((state) => {
-    const updatedFloors = state.floors.map(floor => ({
-      ...floor,
-      walls: floor.walls.map(wall => {
-        if (wall.id !== wallId) return wall;
-        return {
-          ...wall,
-          subObjects: wall.subObjects.filter(obj => obj.id !== subObjectId)
-        };
-      })
-    }));
+    const floorId = wallId.includes('floor-') ? wallId.substring(0, wallId.indexOf('-wall-')) : null;
+    const cleanWallId = wallId.includes('floor-') ? wallId.substring(wallId.indexOf('wall-')) : wallId;
+
+    const updatedFloors = state.floors.map(floor => {
+      if (floorId && floor.id !== floorId) return floor;
+      return {
+        ...floor,
+        walls: floor.walls.map(wall => {
+          if (wall.id !== cleanWallId) return wall;
+          return {
+            ...wall,
+            subObjects: wall.subObjects.filter(obj => obj.id !== subObjectId)
+          };
+        })
+      };
+    });
+
     return {
       floors: updatedFloors,
       uiState: {
@@ -374,7 +446,12 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       const pos = vx * ux + vz * uz;
 
       const halfW = foundObj.width / 2;
-      const clampedPos = Math.max(halfW, Math.min(length - halfW, pos));
+      const wallThickness = foundWall.thickness;
+      const minPos = halfW + wallThickness;
+      const maxPos = length - halfW - wallThickness;
+      const clampedPos = maxPos >= minPos
+        ? Math.max(minPos, Math.min(maxPos, pos))
+        : length / 2;
 
       let clampedElevation = undefined;
       if (foundObj.type !== 'door') {
@@ -468,9 +545,16 @@ export const useProjectStore = create<ProjectStore>((set) => ({
                     Math.pow(newWall.end[1] - newWall.start[1], 2)
                   );
                   const adjustedSubObjects = matchingExisting.subObjects.map(obj => {
-                    const maxPos = wallLength - obj.width / 2;
-                    const newPos = Math.min(Math.max(obj.width / 2, obj.position), maxPos);
-                    return { ...obj, position: newPos };
+                    const wallThickness = newWall.thickness;
+                    const maxWidth = Math.max(0.1, wallLength - 2 * wallThickness);
+                    const clampedWidth = Math.min(maxWidth, obj.width);
+                    const halfW = clampedWidth / 2;
+                    const minPos = halfW + wallThickness;
+                    const maxPos = wallLength - halfW - wallThickness;
+                    const clampedPos = maxPos >= minPos
+                      ? Math.max(minPos, Math.min(maxPos, obj.position))
+                      : wallLength / 2;
+                    return { ...obj, width: clampedWidth, position: clampedPos };
                   });
                   return { ...newWall, subObjects: adjustedSubObjects };
                 }
@@ -516,9 +600,16 @@ export const useProjectStore = create<ProjectStore>((set) => ({
                     Math.pow(newWall.end[1] - newWall.start[1], 2)
                   );
                   const adjustedSubObjects = matchingExisting.subObjects.map(obj => {
-                    const maxPos = wallLength - obj.width / 2;
-                    const newPos = Math.min(Math.max(obj.width / 2, obj.position), maxPos);
-                    return { ...obj, position: newPos };
+                    const wallThickness = newWall.thickness;
+                    const maxWidth = Math.max(0.1, wallLength - 2 * wallThickness);
+                    const clampedWidth = Math.min(maxWidth, obj.width);
+                    const halfW = clampedWidth / 2;
+                    const minPos = halfW + wallThickness;
+                    const maxPos = wallLength - halfW - wallThickness;
+                    const clampedPos = maxPos >= minPos
+                      ? Math.max(minPos, Math.min(maxPos, obj.position))
+                      : wallLength / 2;
+                    return { ...obj, width: clampedWidth, position: clampedPos };
                   });
                   return { ...newWall, subObjects: adjustedSubObjects };
                 }

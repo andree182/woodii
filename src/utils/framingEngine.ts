@@ -184,13 +184,48 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         return [wx, wy, wz];
       };
 
-      // A. Bottom Plate
-      members.push({
-        id: `wall-bottom-plate-${floor.id}-${wall.id}`,
-        type: 'plate',
-        position: toWorld(length / 2, lumberThickness / 2, 0),
-        rotation: [0, rotationY, 0],
-        size: [length, lumberThickness, wall.thickness - 0.02],
+      // A. Bottom Plate (segmented around doors and floor-level openings)
+      const cuts: { start: number; end: number }[] = [];
+      wall.subObjects.forEach((obj) => {
+        const isDoor = obj.type === 'door';
+        const isOpening = obj.type === 'opening';
+        const defaultElevation = isDoor ? 0 : (isOpening ? 0 : 0.9);
+        const currentElevation = obj.elevation !== undefined ? obj.elevation : defaultElevation;
+        
+        // If it starts at the bottom of the wall (clampedElevation < 0.05), we cut the bottom plate
+        if ((isDoor || isOpening) && currentElevation < 0.05) {
+          const xStart = obj.position - obj.width / 2;
+          const xEnd = obj.position + obj.width / 2;
+          cuts.push({ start: xStart, end: xEnd });
+        }
+      });
+
+      // Sort cuts by start coordinate
+      cuts.sort((a, b) => a.start - b.start);
+
+      const bottomSegments: { start: number; end: number }[] = [];
+      let currentX = 0;
+
+      cuts.forEach((cut) => {
+        if (cut.start - currentX > 0.02) {
+          bottomSegments.push({ start: currentX, end: cut.start });
+        }
+        currentX = Math.max(currentX, cut.end);
+      });
+
+      if (length - currentX > 0.02) {
+        bottomSegments.push({ start: currentX, end: length });
+      }
+
+      bottomSegments.forEach((seg, idx) => {
+        const segLen = seg.end - seg.start;
+        members.push({
+          id: `wall-bottom-plate-${floor.id}-${wall.id}-${idx}`,
+          type: 'plate',
+          position: toWorld((seg.start + seg.end) / 2, lumberThickness / 2, 0),
+          rotation: [0, rotationY, 0],
+          size: [segLen, lumberThickness, wall.thickness - 0.02],
+        });
       });
 
       // B. Top Plates (Double)
@@ -352,8 +387,8 @@ export function generateFraming(state: ProjectState): FramingMember[] {
           size: [headerWidth, headerThickness, wall.thickness - 0.01],
         });
 
-        // 4. Window Sill (if not a door)
-        if (!isDoor) {
+        // 4. Window Sill (if not a door and is elevated)
+        if (!isDoor && yStart >= 0.05) {
           members.push({
             id: `wall-sill-${floor.id}-${wall.id}-${obj.id}`,
             type: 'sill',
