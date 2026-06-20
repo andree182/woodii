@@ -148,19 +148,21 @@ export function generateFraming(state: ProjectState): FramingMember[] {
       const rotationY = -Math.atan2(dz, dx);
 
       // Determine heights
-      let wallBaseHeight = heightPerFloor;
-      let hLeft = heightPerFloor;
-      let hRight = heightPerFloor;
+      const joistHeight = 0.14;
+      const baseHeight = isTopFloor ? heightPerFloor : heightPerFloor - joistHeight;
+      let wallBaseHeight = baseHeight;
+      let hLeft = baseHeight;
+      let hRight = baseHeight;
       const isBack = wall.id === 'wall-back';
 
       if (isTopFloor && isFlatRoof) {
         if (wall.id === 'wall-left') {
-          wallBaseHeight = heightPerFloor + width * Math.tan(angleRad);
+          wallBaseHeight = baseHeight + width * Math.tan(angleRad);
         } else if (wall.id === 'wall-right') {
-          wallBaseHeight = heightPerFloor;
+          wallBaseHeight = baseHeight;
         } else if (wall.id === 'wall-front' || wall.id === 'wall-back') {
-          const hl = heightPerFloor + (width + wall.thickness) * Math.tan(angleRad);
-          const hr = heightPerFloor;
+          const hl = baseHeight + (width + wall.thickness) * Math.tan(angleRad);
+          const hr = baseHeight;
           hLeft = isBack ? hr : hl;
           hRight = isBack ? hl : hr;
         }
@@ -332,18 +334,45 @@ export function generateFraming(state: ProjectState): FramingMember[] {
       });
 
       // C. Render openings framing (King studs, Jack studs, Headers, Sills, Cripples)
-      wall.subObjects.forEach((obj) => {
+      wall.subObjects.forEach((rawObj) => {
+        const isDoor = rawObj.type === 'door';
+        const isWindow = rawObj.type === 'window';
+        const defaultElevation = isDoor ? 0 : (isWindow ? 0.9 : 0);
+        const currentElevation = rawObj.elevation !== undefined ? rawObj.elevation : defaultElevation;
+        const localWallHeightAtObj = getWallHeightAtX(rawObj.position);
+        
+        const lumberThickness = 0.04;
+        const doubleTopPlate = 0.08;
+        const headerThickness = 0.14;
+        const topClearance = doubleTopPlate + headerThickness; // 0.22
+        let clampedElevation = currentElevation;
+        let clampedHeight = rawObj.height;
+
+        if (isDoor) {
+          clampedElevation = 0;
+          clampedHeight = Math.max(0.1, Math.min(localWallHeightAtObj - topClearance, rawObj.height));
+        } else if (isWindow) {
+          const minElevation = lumberThickness;
+          clampedHeight = Math.max(0.1, Math.min(localWallHeightAtObj - topClearance - minElevation, rawObj.height));
+          clampedElevation = Math.max(minElevation, Math.min(localWallHeightAtObj - topClearance - clampedHeight, currentElevation));
+        } else {
+          // opening
+          if (currentElevation < 0.05) {
+            clampedElevation = 0;
+            clampedHeight = Math.max(0.1, Math.min(localWallHeightAtObj - topClearance, rawObj.height));
+          } else {
+            const minElevation = lumberThickness;
+            clampedHeight = Math.max(0.1, Math.min(localWallHeightAtObj - topClearance - minElevation, rawObj.height));
+            clampedElevation = Math.max(minElevation, Math.min(localWallHeightAtObj - topClearance - clampedHeight, currentElevation));
+          }
+        }
+
+        const obj = { ...rawObj, height: clampedHeight, elevation: clampedElevation };
         const xStart = obj.position - obj.width / 2;
         const xEnd = obj.position + obj.width / 2;
         
-        const isDoor = obj.type === 'door';
-        const defaultElevation = isDoor ? 0 : (obj.type === 'window' ? 0.9 : 0);
-        const currentElevation = obj.elevation !== undefined ? obj.elevation : defaultElevation;
-        const localWallHeightAtObj = getWallHeightAtX(obj.position);
-        const clampedElevation = Math.max(0, Math.min(Math.max(0, localWallHeightAtObj - obj.height), currentElevation));
-        
-        const yStart = clampedElevation;
-        const yEnd = clampedElevation + obj.height;
+        const yStart = obj.elevation;
+        const yEnd = obj.elevation + obj.height;
 
         // 1. King Studs (Full-height on both sides)
         const kingLeftX = xStart - lumberThickness - lumberThickness / 2;
@@ -378,7 +407,6 @@ export function generateFraming(state: ProjectState): FramingMember[] {
 
         // 3. Header (horizontal load-bearing beam, double width)
         const headerWidth = obj.width + lumberThickness * 2;
-        const headerThickness = 0.14; // 2x6 header depth
         members.push({
           id: `wall-header-${floor.id}-${wall.id}-${obj.id}`,
           type: 'header',

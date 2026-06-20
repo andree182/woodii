@@ -156,7 +156,63 @@ export const useProjectStore = create<ProjectStore>((set) => ({
             const clampedPos = maxPos >= minPos
               ? Math.max(minPos, Math.min(maxPos, obj.position))
               : wallLength / 2;
-            return { ...obj, width: clampedWidth, position: clampedPos };
+
+            // Calculate wall height at this object's clamped position
+            const level = floor.level;
+            const isTopFloor = level === state.floors.length - 1;
+            const isFlatRoof = state.roof.type === 'flat';
+            const angleRad = (state.roof.inclination * Math.PI) / 180;
+            let localWallHeight = isTopFloor ? newDims.heightPerFloor : newDims.heightPerFloor - 0.14;
+            
+            if (isTopFloor && isFlatRoof) {
+              if (newWall.id === 'wall-left') {
+                localWallHeight = newDims.heightPerFloor + (newDims.width / 2) * Math.tan(angleRad);
+              } else if (newWall.id === 'wall-right') {
+                localWallHeight = newDims.heightPerFloor - (newDims.width / 2) * Math.tan(angleRad);
+              } else if (newWall.id === 'wall-front' || newWall.id === 'wall-back') {
+                const isBack = newWall.id === 'wall-back';
+                const hLeft = newDims.heightPerFloor + (newDims.width / 2 + newWall.thickness * 0.5) * Math.tan(angleRad);
+                const hRight = newDims.heightPerFloor - (newDims.width / 2 + newWall.thickness * 0.5) * Math.tan(angleRad);
+                localWallHeight = isBack
+                  ? hRight + clampedPos * Math.tan(angleRad)
+                  : hLeft - clampedPos * Math.tan(angleRad);
+              }
+            }
+
+            // Clamp height and elevation to prevent interference with top/bottom plates and rafters (including the window header)
+            const lumberThickness = 0.04;
+            const doubleTopPlate = 0.08;
+            const headerThickness = 0.14;
+            const topClearance = doubleTopPlate + headerThickness; // 0.22
+            let clampedHeight = obj.height;
+            let clampedElevation = obj.elevation !== undefined ? obj.elevation : (obj.type === 'door' ? 0 : 0.9);
+
+            if (obj.type === 'door') {
+              clampedElevation = 0;
+              clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance, obj.height));
+            } else if (obj.type === 'window') {
+              const minElevation = lumberThickness;
+              clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance - minElevation, obj.height));
+              clampedElevation = Math.max(minElevation, Math.min(localWallHeight - topClearance - clampedHeight, clampedElevation));
+            } else {
+              // opening
+              if (clampedElevation < 0.05) {
+                clampedElevation = 0;
+                clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance, obj.height));
+              } else {
+                const minElevation = lumberThickness;
+                clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance - minElevation, obj.height));
+                clampedElevation = Math.max(minElevation, Math.min(localWallHeight - topClearance - clampedHeight, clampedElevation));
+              }
+            }
+
+            return {
+              ...obj,
+              width: clampedWidth,
+              position: clampedPos,
+              height: clampedHeight,
+              elevation: clampedElevation
+            };
           });
           return { ...newWall, subObjects: adjustedSubObjects };
         }
@@ -290,7 +346,62 @@ export const useProjectStore = create<ProjectStore>((set) => ({
                 ? Math.max(minPos, Math.min(maxPos, merged.position))
                 : length / 2;
 
-              return { ...merged, width: clampedWidth, position: clampedPos };
+              // Calculate wall height at the clamped position
+              const level = floor.level;
+              const isTopFloor = level === state.floors.length - 1;
+              const isFlatRoof = state.roof.type === 'flat';
+              const angleRad = (state.roof.inclination * Math.PI) / 180;
+              let localWallHeight = isTopFloor ? state.dimensions.heightPerFloor : state.dimensions.heightPerFloor - 0.14;
+              
+              if (isTopFloor && isFlatRoof) {
+                if (wall.id === 'wall-left') {
+                  localWallHeight = state.dimensions.heightPerFloor + (state.dimensions.width / 2) * Math.tan(angleRad);
+                } else if (wall.id === 'wall-right') {
+                  localWallHeight = state.dimensions.heightPerFloor - (state.dimensions.width / 2) * Math.tan(angleRad);
+                } else if (wall.id === 'wall-front' || wall.id === 'wall-back') {
+                  const isBack = wall.id === 'wall-back';
+                  const hLeft = state.dimensions.heightPerFloor + (state.dimensions.width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
+                  const hRight = state.dimensions.heightPerFloor - (state.dimensions.width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
+                  localWallHeight = isBack
+                    ? hRight + clampedPos * Math.tan(angleRad)
+                    : hLeft - clampedPos * Math.tan(angleRad);
+                }
+              }
+
+              // Clamp height and elevation to prevent interference with top/bottom plates and rafters (including the window header)
+              const lumberThickness = 0.04;
+              const doubleTopPlate = 0.08;
+              const headerThickness = 0.14;
+              const topClearance = doubleTopPlate + headerThickness; // 0.22
+              let clampedHeight = merged.height;
+              let clampedElevation = merged.elevation !== undefined ? merged.elevation : (merged.type === 'door' ? 0 : 0.9);
+
+              if (merged.type === 'door') {
+                clampedElevation = 0;
+                clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance, merged.height));
+              } else if (merged.type === 'window') {
+                const minElevation = lumberThickness;
+                clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance - minElevation, merged.height));
+                clampedElevation = Math.max(minElevation, Math.min(localWallHeight - topClearance - clampedHeight, clampedElevation));
+              } else {
+                // opening
+                if (clampedElevation < 0.05) {
+                  clampedElevation = 0;
+                  clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance, merged.height));
+                } else {
+                  const minElevation = lumberThickness;
+                  clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance - minElevation, merged.height));
+                  clampedElevation = Math.max(minElevation, Math.min(localWallHeight - topClearance - clampedHeight, clampedElevation));
+                }
+              }
+
+              return {
+                ...merged,
+                width: clampedWidth,
+                position: clampedPos,
+                height: clampedHeight,
+                elevation: clampedElevation
+              };
             })
           };
         })
@@ -332,13 +443,55 @@ export const useProjectStore = create<ProjectStore>((set) => ({
             ? Math.max(minPos, Math.min(maxPos, 1.0))
             : length / 2;
 
+          // Calculate wall height at the clamped position
+          const level = floor.level;
+          const isTopFloor = level === state.floors.length - 1;
+          const isFlatRoof = state.roof.type === 'flat';
+          const angleRad = (state.roof.inclination * Math.PI) / 180;
+          let localWallHeight = isTopFloor ? state.dimensions.heightPerFloor : state.dimensions.heightPerFloor - 0.14;
+          
+          if (isTopFloor && isFlatRoof) {
+            if (wall.id === 'wall-left') {
+              localWallHeight = state.dimensions.heightPerFloor + (state.dimensions.width / 2) * Math.tan(angleRad);
+            } else if (wall.id === 'wall-right') {
+              localWallHeight = state.dimensions.heightPerFloor - (state.dimensions.width / 2) * Math.tan(angleRad);
+            } else if (wall.id === 'wall-front' || wall.id === 'wall-back') {
+              const isBack = wall.id === 'wall-back';
+              const hLeft = state.dimensions.heightPerFloor + (state.dimensions.width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
+              const hRight = state.dimensions.heightPerFloor - (state.dimensions.width / 2 + wall.thickness * 0.5) * Math.tan(angleRad);
+              localWallHeight = isBack
+                ? hRight + clampedPos * Math.tan(angleRad)
+                : hLeft - clampedPos * Math.tan(angleRad);
+            }
+          }
+
+          const lumberThickness = 0.04;
+          const doubleTopPlate = 0.08;
+          const headerThickness = 0.14;
+          const topClearance = doubleTopPlate + headerThickness; // 0.22
+          let clampedHeight = heightVal;
+          let clampedElevation = type === 'window' ? 0.9 : 0;
+
+          if (type === 'door') {
+            clampedElevation = 0;
+            clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance, heightVal));
+          } else if (type === 'window') {
+            const minElevation = lumberThickness;
+            clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance - minElevation, heightVal));
+            clampedElevation = Math.max(minElevation, Math.min(localWallHeight - topClearance - clampedHeight, clampedElevation));
+          } else {
+            // opening
+            clampedElevation = 0;
+            clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance, heightVal));
+          }
+
           const defaultObj = {
             id,
             type,
             position: clampedPos,
             width: widthVal,
-            height: heightVal,
-            elevation: type === 'window' ? 0.9 : 0,
+            height: clampedHeight,
+            elevation: clampedElevation,
             color: type === 'door' ? '#8B4513' : type === 'opening' ? '#222222' : '#ffffff',
           };
 
@@ -453,34 +606,51 @@ export const useProjectStore = create<ProjectStore>((set) => ({
         ? Math.max(minPos, Math.min(maxPos, pos))
         : length / 2;
 
-      let clampedElevation = undefined;
-      if (foundObj.type !== 'door') {
-        const level = foundFloor.level;
-        const localY = y - level * state.dimensions.heightPerFloor;
-        const targetElevation = localY - foundObj.height / 2;
+      let clampedElevation = 0;
+      const level = foundFloor.level;
+      const localY = y - level * state.dimensions.heightPerFloor;
+      const targetElevation = localY - foundObj.height / 2;
 
-        const isTopFloor = level === state.floors.length - 1;
-        const isFlatRoof = state.roof.type === 'flat';
-        const angleRad = (state.roof.inclination * Math.PI) / 180;
-        let localWallHeight = state.dimensions.heightPerFloor;
-        
-        if (isTopFloor && isFlatRoof) {
-          if (foundWall.id === 'wall-left') {
-            localWallHeight = state.dimensions.heightPerFloor + (state.dimensions.width / 2) * Math.tan(angleRad);
-          } else if (foundWall.id === 'wall-right') {
-            localWallHeight = state.dimensions.heightPerFloor - (state.dimensions.width / 2) * Math.tan(angleRad);
-          } else if (foundWall.id === 'wall-front' || foundWall.id === 'wall-back') {
-            const isBack = foundWall.id === 'wall-back';
-            const hLeft = state.dimensions.heightPerFloor + (state.dimensions.width / 2 + foundWall.thickness * 0.5) * Math.tan(angleRad);
-            const hRight = state.dimensions.heightPerFloor - (state.dimensions.width / 2 + foundWall.thickness * 0.5) * Math.tan(angleRad);
-            localWallHeight = isBack
-              ? hRight + clampedPos * Math.tan(angleRad)
-              : hLeft - clampedPos * Math.tan(angleRad);
-          }
+      const isTopFloor = level === state.floors.length - 1;
+      const isFlatRoof = state.roof.type === 'flat';
+      const angleRad = (state.roof.inclination * Math.PI) / 180;
+      let localWallHeight = isTopFloor ? state.dimensions.heightPerFloor : state.dimensions.heightPerFloor - 0.14;
+      
+      if (isTopFloor && isFlatRoof) {
+        if (foundWall.id === 'wall-left') {
+          localWallHeight = state.dimensions.heightPerFloor + (state.dimensions.width / 2) * Math.tan(angleRad);
+        } else if (foundWall.id === 'wall-right') {
+          localWallHeight = state.dimensions.heightPerFloor - (state.dimensions.width / 2) * Math.tan(angleRad);
+        } else if (foundWall.id === 'wall-front' || foundWall.id === 'wall-back') {
+          const isBack = foundWall.id === 'wall-back';
+          const hLeft = state.dimensions.heightPerFloor + (state.dimensions.width / 2 + foundWall.thickness * 0.5) * Math.tan(angleRad);
+          const hRight = state.dimensions.heightPerFloor - (state.dimensions.width / 2 + foundWall.thickness * 0.5) * Math.tan(angleRad);
+          localWallHeight = isBack
+            ? hRight + clampedPos * Math.tan(angleRad)
+            : hLeft - clampedPos * Math.tan(angleRad);
         }
+      }
 
-        const maxElevation = localWallHeight - foundObj.height;
-        clampedElevation = Math.max(0, Math.min(Math.max(0, maxElevation), targetElevation));
+      const lumberThickness = 0.04;
+      const doubleTopPlate = 0.08;
+      const headerThickness = 0.14;
+      const topClearance = doubleTopPlate + headerThickness; // 0.22
+
+      if (foundObj.type === 'door') {
+        clampedElevation = 0;
+      } else if (foundObj.type === 'window') {
+        const minElevation = lumberThickness;
+        const maxElevation = localWallHeight - topClearance - foundObj.height;
+        clampedElevation = Math.max(minElevation, Math.min(Math.max(minElevation, maxElevation), targetElevation));
+      } else {
+        // opening
+        if (targetElevation < 0.05) {
+          clampedElevation = 0;
+        } else {
+          const minElevation = lumberThickness;
+          const maxElevation = localWallHeight - topClearance - foundObj.height;
+          clampedElevation = Math.max(minElevation, Math.min(Math.max(minElevation, maxElevation), targetElevation));
+        }
       }
 
       const updatedFloors = state.floors.map(floor => {
@@ -554,7 +724,63 @@ export const useProjectStore = create<ProjectStore>((set) => ({
                     const clampedPos = maxPos >= minPos
                       ? Math.max(minPos, Math.min(maxPos, obj.position))
                       : wallLength / 2;
-                    return { ...obj, width: clampedWidth, position: clampedPos };
+
+                    // Calculate wall height at this object's clamped position
+                    const level = floor.level;
+                    const isTopFloor = level === state.floors.length - 1;
+                    const isFlatRoof = state.roof.type === 'flat';
+                    const angleRad = (state.roof.inclination * Math.PI) / 180;
+                    let localWallHeight = isTopFloor ? newDims.heightPerFloor : newDims.heightPerFloor - 0.14;
+                    
+                    if (isTopFloor && isFlatRoof) {
+                      if (newWall.id === 'wall-left') {
+                        localWallHeight = newDims.heightPerFloor + (newDims.width / 2) * Math.tan(angleRad);
+                      } else if (newWall.id === 'wall-right') {
+                        localWallHeight = newDims.heightPerFloor - (newDims.width / 2) * Math.tan(angleRad);
+                      } else if (newWall.id === 'wall-front' || newWall.id === 'wall-back') {
+                        const isBack = newWall.id === 'wall-back';
+                        const hLeft = newDims.heightPerFloor + (newDims.width / 2 + newWall.thickness * 0.5) * Math.tan(angleRad);
+                        const hRight = newDims.heightPerFloor - (newDims.width / 2 + newWall.thickness * 0.5) * Math.tan(angleRad);
+                        localWallHeight = isBack
+                          ? hRight + clampedPos * Math.tan(angleRad)
+                          : hLeft - clampedPos * Math.tan(angleRad);
+                      }
+                    }
+
+                    // Clamp height and elevation to prevent interference with top/bottom plates and rafters (including the window header)
+                    const lumberThickness = 0.04;
+                    const doubleTopPlate = 0.08;
+                    const headerThickness = 0.14;
+                    const topClearance = doubleTopPlate + headerThickness; // 0.22
+                    let clampedHeight = obj.height;
+                    let clampedElevation = obj.elevation !== undefined ? obj.elevation : (obj.type === 'door' ? 0 : 0.9);
+
+                    if (obj.type === 'door') {
+                      clampedElevation = 0;
+                      clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance, obj.height));
+                    } else if (obj.type === 'window') {
+                      const minElevation = lumberThickness;
+                      clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance - minElevation, obj.height));
+                      clampedElevation = Math.max(minElevation, Math.min(localWallHeight - topClearance - clampedHeight, clampedElevation));
+                    } else {
+                      // opening
+                      if (clampedElevation < 0.05) {
+                        clampedElevation = 0;
+                        clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance, obj.height));
+                      } else {
+                        const minElevation = lumberThickness;
+                        clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance - minElevation, obj.height));
+                        clampedElevation = Math.max(minElevation, Math.min(localWallHeight - topClearance - clampedHeight, clampedElevation));
+                      }
+                    }
+
+                    return {
+                      ...obj,
+                      width: clampedWidth,
+                      position: clampedPos,
+                      height: clampedHeight,
+                      elevation: clampedElevation
+                    };
                   });
                   return { ...newWall, subObjects: adjustedSubObjects };
                 }
@@ -609,7 +835,63 @@ export const useProjectStore = create<ProjectStore>((set) => ({
                     const clampedPos = maxPos >= minPos
                       ? Math.max(minPos, Math.min(maxPos, obj.position))
                       : wallLength / 2;
-                    return { ...obj, width: clampedWidth, position: clampedPos };
+
+                    // Calculate wall height at this object's clamped position
+                    const level = floor.level;
+                    const isTopFloor = level === state.floors.length - 1;
+                    const isFlatRoof = state.roof.type === 'flat';
+                    const angleRad = (state.roof.inclination * Math.PI) / 180;
+                    let localWallHeight = isTopFloor ? newDims.heightPerFloor : newDims.heightPerFloor - 0.14;
+                    
+                    if (isTopFloor && isFlatRoof) {
+                      if (newWall.id === 'wall-left') {
+                        localWallHeight = newDims.heightPerFloor + (newDims.width / 2) * Math.tan(angleRad);
+                      } else if (newWall.id === 'wall-right') {
+                        localWallHeight = newDims.heightPerFloor - (newDims.width / 2) * Math.tan(angleRad);
+                      } else if (newWall.id === 'wall-front' || newWall.id === 'wall-back') {
+                        const isBack = newWall.id === 'wall-back';
+                        const hLeft = newDims.heightPerFloor + (newDims.width / 2 + newWall.thickness * 0.5) * Math.tan(angleRad);
+                        const hRight = newDims.heightPerFloor - (newDims.width / 2 + newWall.thickness * 0.5) * Math.tan(angleRad);
+                        localWallHeight = isBack
+                          ? hRight + clampedPos * Math.tan(angleRad)
+                          : hLeft - clampedPos * Math.tan(angleRad);
+                      }
+                    }
+
+                    // Clamp height and elevation to prevent interference with top/bottom plates and rafters (including the window header)
+                    const lumberThickness = 0.04;
+                    const doubleTopPlate = 0.08;
+                    const headerThickness = 0.14;
+                    const topClearance = doubleTopPlate + headerThickness; // 0.22
+                    let clampedHeight = obj.height;
+                    let clampedElevation = obj.elevation !== undefined ? obj.elevation : (obj.type === 'door' ? 0 : 0.9);
+
+                    if (obj.type === 'door') {
+                      clampedElevation = 0;
+                      clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance, obj.height));
+                    } else if (obj.type === 'window') {
+                      const minElevation = lumberThickness;
+                      clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance - minElevation, obj.height));
+                      clampedElevation = Math.max(minElevation, Math.min(localWallHeight - topClearance - clampedHeight, clampedElevation));
+                    } else {
+                      // opening
+                      if (clampedElevation < 0.05) {
+                        clampedElevation = 0;
+                        clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance, obj.height));
+                      } else {
+                        const minElevation = lumberThickness;
+                        clampedHeight = Math.max(0.1, Math.min(localWallHeight - topClearance - minElevation, obj.height));
+                        clampedElevation = Math.max(minElevation, Math.min(localWallHeight - topClearance - clampedHeight, clampedElevation));
+                      }
+                    }
+
+                    return {
+                      ...obj,
+                      width: clampedWidth,
+                      position: clampedPos,
+                      height: clampedHeight,
+                      elevation: clampedElevation
+                    };
                   });
                   return { ...newWall, subObjects: adjustedSubObjects };
                 }

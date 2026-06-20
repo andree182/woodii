@@ -150,37 +150,41 @@ export default function BuildingRenderer() {
     const isFlatRoof = roof.type === 'flat';
     const angleRad = (roof.inclination * Math.PI) / 180;
     
-    let customHeight = heightPerFloor;
+    const joistHeight = 0.14;
+    const baseHeight = isTopFloor ? heightPerFloor : heightPerFloor - joistHeight;
+    let customHeight = baseHeight;
 
     if (isTopFloor && isFlatRoof) {
       if (wall.id === 'wall-left') {
-        customHeight = heightPerFloor + width * Math.tan(angleRad);
+        customHeight = baseHeight + width * Math.tan(angleRad);
       } else if (wall.id === 'wall-right') {
-        customHeight = heightPerFloor;
+        customHeight = baseHeight;
       }
     }
 
     // Compute flat roof heights for front/back walls
-    const hLeft = heightPerFloor + (width + wall.thickness) * Math.tan(angleRad);
-    const hRight = heightPerFloor;
+    const hLeft = baseHeight + (width + wall.thickness) * Math.tan(angleRad);
+    const hRight = baseHeight;
 
-    const createWallShape = (xStartOffset: number, xEndOffset: number) => {
+    const createWallShape = (xStartOffset: number, xEndOffset: number, yHeightOffset = 0) => {
       const shape = new Shape();
       shape.moveTo(xStartOffset, 0);
       shape.lineTo(length - xEndOffset, 0);
+
+      const targetHeight = customHeight + yHeightOffset;
 
       if (isTopFloor && isFlatRoof && (wall.id === 'wall-front' || wall.id === 'wall-back')) {
         const slopeStartHeight = isBack ? hRight : hLeft;
         const slopeEndHeight = isBack ? hLeft : hRight;
         
-        const yStart = slopeStartHeight + (xStartOffset / length) * (slopeEndHeight - slopeStartHeight);
-        const yEnd = slopeStartHeight + ((length - xEndOffset) / length) * (slopeEndHeight - slopeStartHeight);
+        const yStart = slopeStartHeight + (xStartOffset / length) * (slopeEndHeight - slopeStartHeight) + yHeightOffset;
+        const yEnd = slopeStartHeight + ((length - xEndOffset) / length) * (slopeEndHeight - slopeStartHeight) + yHeightOffset;
 
         shape.lineTo(length - xEndOffset, yEnd);
         shape.lineTo(xStartOffset, yStart);
       } else {
-        shape.lineTo(length - xEndOffset, customHeight);
-        shape.lineTo(xStartOffset, customHeight);
+        shape.lineTo(length - xEndOffset, targetHeight);
+        shape.lineTo(xStartOffset, targetHeight);
       }
       shape.closePath();
 
@@ -269,7 +273,7 @@ export default function BuildingRenderer() {
                 const layerColor = isSelected ? '#ff8c00' : layer.color;
                 const layerOpacity = isSelected ? Math.min(1.0, layer.opacity + 0.15) : layer.opacity;
                 const isTransparent = mode === 'seeThrough';
-                const shape = createWallShape(layer.xStartOffset, layer.xEndOffset);
+                const shape = createWallShape(layer.xStartOffset, layer.xEndOffset, layer.suffix === 'outer' && !isTopFloor ? 0.14 : 0);
 
                 return (
                   <mesh
@@ -337,23 +341,49 @@ export default function BuildingRenderer() {
         )}
 
         {/* Sub-objects (windows, doors, openings) nested in wall space */}
-        {wall.subObjects.map((obj) => {
-          const isDoor = obj.type === 'door';
-          const isWindow = obj.type === 'window';
-          const isOpening = obj.type === 'opening';
+        {wall.subObjects.map((rawObj) => {
+          const isDoor = rawObj.type === 'door';
+          const isWindow = rawObj.type === 'window';
+          const isOpening = rawObj.type === 'opening';
 
           const defaultElevation = isDoor ? 0 : (isWindow ? 0.9 : 0);
-          const currentElevation = obj.elevation !== undefined ? obj.elevation : defaultElevation;
+          const currentElevation = rawObj.elevation !== undefined ? rawObj.elevation : defaultElevation;
           
           let localWallHeightAtObj = customHeight;
           if (isTopFloor && isFlatRoof && (wall.id === 'wall-front' || wall.id === 'wall-back')) {
             localWallHeightAtObj = isBack
-              ? hRight + obj.position * Math.tan(angleRad)
-              : hLeft - obj.position * Math.tan(angleRad);
+              ? hRight + rawObj.position * Math.tan(angleRad)
+              : hLeft - rawObj.position * Math.tan(angleRad);
           }
-          const clampedElevation = Math.max(0, Math.min(Math.max(0, localWallHeightAtObj - obj.height), currentElevation));
+
+          const lumberThickness = 0.04;
+          const doubleTopPlate = 0.08;
+          const headerThickness = 0.14;
+          const topClearance = doubleTopPlate + headerThickness; // 0.22
+          let clampedElevation = currentElevation;
+          let clampedHeight = rawObj.height;
+
+          if (isDoor) {
+            clampedElevation = 0;
+            clampedHeight = Math.max(0.1, Math.min(localWallHeightAtObj - topClearance, rawObj.height));
+          } else if (isWindow) {
+            const minElevation = lumberThickness;
+            clampedHeight = Math.max(0.1, Math.min(localWallHeightAtObj - topClearance - minElevation, rawObj.height));
+            clampedElevation = Math.max(minElevation, Math.min(localWallHeightAtObj - topClearance - clampedHeight, currentElevation));
+          } else {
+            // opening
+            if (currentElevation < 0.05) {
+              clampedElevation = 0;
+              clampedHeight = Math.max(0.1, Math.min(localWallHeightAtObj - topClearance, rawObj.height));
+            } else {
+              const minElevation = lumberThickness;
+              clampedHeight = Math.max(0.1, Math.min(localWallHeightAtObj - topClearance - minElevation, rawObj.height));
+              clampedElevation = Math.max(minElevation, Math.min(localWallHeightAtObj - topClearance - clampedHeight, currentElevation));
+            }
+          }
           
-          const localY = clampedElevation + obj.height / 2;
+          const obj = { ...rawObj, height: clampedHeight, elevation: clampedElevation };
+          const localY = obj.elevation + obj.height / 2;
           const objId = obj.id;
 
           const defaultColor = isOpening ? '#222222' : (obj.color || '#a0d0f0');
