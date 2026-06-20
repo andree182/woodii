@@ -1,6 +1,7 @@
 import { DoubleSide, Shape, Path, Plane, Vector3 } from 'three';
 import { useProjectStore } from '../store';
 import { Wall, Floor } from '../types';
+import { generateFraming } from '../utils/framingEngine';
 
 export default function BuildingRenderer() {
   const dimensions = useProjectStore((state) => state.dimensions);
@@ -76,19 +77,21 @@ export default function BuildingRenderer() {
     return (
       <group key={floor.id}>
         {/* Floor Slab */}
-        <mesh
-          position={[0, floorY, 0]}
-          rotation={[-Math.PI / 2, 0, 0]}
-          castShadow
-          receiveShadow
-          onClick={(e) => {
-            e.stopPropagation();
-            selectObject(floor.id, 'floor');
-          }}
-        >
-          <extrudeGeometry args={[floorShape, { depth: 0.15, bevelEnabled: false }]} />
-          <meshStandardMaterial {...matProps} roughness={0.8} />
-        </mesh>
+        {uiState.seeThroughMode !== 'studsOnly' && (
+          <mesh
+            position={[0, floorY, 0]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            castShadow
+            receiveShadow
+            onClick={(e) => {
+              e.stopPropagation();
+              selectObject(floor.id, 'floor');
+            }}
+          >
+            <extrudeGeometry args={[floorShape, { depth: 0.15, bevelEnabled: false }]} />
+            <meshStandardMaterial {...matProps} roughness={0.8} />
+          </mesh>
+        )}
 
         {/* Staircase leading up to the opening from the floor below */}
         {floor.level > 0 && floor.floorOpening && (() => {
@@ -215,18 +218,20 @@ export default function BuildingRenderer() {
     return (
       <group key={wallId} position={[startX, level * heightPerFloor, startZ]} rotation={[0, rotationY, 0]}>
         {/* Wall body with cutouts */}
-        <mesh
-          position={[0, 0, -wall.thickness / 2]}
-          castShadow
-          receiveShadow
-          onClick={(e) => {
-            e.stopPropagation();
-            selectObject(wallId, 'wall');
-          }}
-        >
-          <extrudeGeometry args={[wallShape, { depth: wall.thickness, bevelEnabled: false }]} />
-          <meshStandardMaterial {...matProps} roughness={0.7} />
-        </mesh>
+        {uiState.seeThroughMode !== 'studsOnly' && (
+          <mesh
+            position={[0, 0, -wall.thickness / 2]}
+            castShadow
+            receiveShadow
+            onClick={(e) => {
+              e.stopPropagation();
+              selectObject(wallId, 'wall');
+            }}
+          >
+            <extrudeGeometry args={[wallShape, { depth: wall.thickness, bevelEnabled: false }]} />
+            <meshStandardMaterial {...matProps} roughness={0.7} />
+          </mesh>
+        )}
 
         {/* Drag handle for resizing wall depth/width */}
         {uiState.selectedId === wallId && (
@@ -445,6 +450,7 @@ export default function BuildingRenderer() {
 
   // Render the roof
   const renderRoof = () => {
+    if (uiState.seeThroughMode === 'studsOnly') return null;
     const matProps = getMaterialProps('roof', 'roof', '#a05040');
     const { overhang, inclination, thickness, type } = roof;
     const angleRad = (inclination * Math.PI) / 180;
@@ -556,6 +562,51 @@ export default function BuildingRenderer() {
 
       {/* Roof: only render if we are viewing all floors or the highest floor */}
       {(uiState.currentFloorView === -1 || uiState.currentFloorView === totalFloors - 1) && renderRoof()}
+
+      {/* 2x4 Framing Layer: render in studsOnly and seeThrough modes */}
+      {uiState.seeThroughMode !== 'solid' && (() => {
+        const state = useProjectStore.getState();
+        const framingMembers = generateFraming(state);
+
+        return (
+          <group>
+            {framingMembers.map((member) => {
+              if (uiState.currentFloorView !== -1) {
+                const isFloorMember = member.id.includes(`floor-${uiState.currentFloorView}`) || 
+                                      member.id.includes(`-floor-${uiState.currentFloorView}`) ||
+                                      (member.type === 'joist' && member.id.endsWith(`-${uiState.currentFloorView}`));
+                
+                const isWallMember = member.id.includes(`floor-${uiState.currentFloorView}`);
+                
+                const isRoofMember = member.type === 'rafter' || member.type === 'ridge';
+                const isTopFloorView = uiState.currentFloorView === totalFloors - 1;
+
+                if (!isFloorMember && !isWallMember && !(isRoofMember && isTopFloorView)) {
+                  return null;
+                }
+              }
+
+              let woodColor = '#d2b48c'; // standard lumber tan
+              if (member.type === 'plate') woodColor = '#cdaa7d'; // slightly darker
+              if (member.type === 'header') woodColor = '#b58a5c'; // structural header color
+              if (member.type === 'rafter' || member.type === 'ridge') woodColor = '#cd853f'; // rafters color
+              
+              return (
+                <mesh
+                  key={member.id}
+                  position={member.position}
+                  rotation={member.rotation}
+                  castShadow
+                  receiveShadow
+                >
+                  <boxGeometry args={member.size} />
+                  <meshStandardMaterial color={woodColor} roughness={0.9} />
+                </mesh>
+              );
+            })}
+          </group>
+        );
+      })()}
     </group>
   );
 }
