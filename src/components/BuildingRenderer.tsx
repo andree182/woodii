@@ -8,6 +8,7 @@ export default function BuildingRenderer() {
   const floors = useProjectStore((state) => state.floors);
   const roof = useProjectStore((state) => state.roof);
   const uiState = useProjectStore((state) => state.uiState);
+  const foundation = useProjectStore((state) => state.foundation);
   const selectObject = useProjectStore((state) => state.selectObject);
   const startDragging = useProjectStore((state) => state.startDragging);
   const stopDragging = useProjectStore((state) => state.stopDragging);
@@ -81,7 +82,7 @@ export default function BuildingRenderer() {
     return (
       <group key={floor.id}>
         {/* Floor Slab */}
-        {uiState.seeThroughMode !== 'studsOnly' && (
+        {uiState.seeThroughMode !== 'studsOnly' && !(floor.level === 0 && foundation.type === 'screws') && (
           <mesh
             position={[0, floorY, 0]}
             rotation={[-Math.PI / 2, 0, 0]}
@@ -771,18 +772,24 @@ export default function BuildingRenderer() {
           </group>
         );
       })()}
-
       {/* Roof: only render if we are viewing all floors or the highest floor */}
       {(uiState.currentFloorView === -1 || uiState.currentFloorView === totalFloors - 1 || uiState.currentFloorView === totalFloors) && renderRoof()}
 
-      {/* 2x4 Framing Layer: render in studsOnly and seeThrough modes */}
-      {uiState.seeThroughMode !== 'solid' && (() => {
+      {/* 2x4 Framing & Foundation Layer */}
+      {(() => {
         const state = useProjectStore.getState();
         const framingMembers = generateFraming(state);
 
+        // Filter: in solid mode, only render screws. In seeThrough and studsOnly, render all.
+        const visibleMembers = uiState.seeThroughMode === 'solid'
+          ? framingMembers.filter(m => m.type === 'screw')
+          : framingMembers;
+
+        if (visibleMembers.length === 0) return null;
+
         return (
           <group>
-            {framingMembers.map((member) => {
+            {visibleMembers.map((member) => {
               if (uiState.currentFloorView !== -1) {
                 const memberLevel = getMemberLevel(member.id);
                 const isRoofMember = member.type === 'rafter' || member.type === 'ridge' || member.id.includes('roof-');
@@ -797,6 +804,7 @@ export default function BuildingRenderer() {
               if (member.type === 'plate') woodColor = '#cdaa7d'; // slightly darker
               if (member.type === 'header') woodColor = '#b58a5c'; // structural header color
               if (member.type === 'rafter' || member.type === 'ridge') woodColor = '#cd853f'; // rafters color
+              if (member.type === 'screw') woodColor = '#7f8c8d'; // steel gray for ground screws
               
               const wallMatch = member.id.match(/(floor-\d+-wall-(?:front|back|left|right))/);
               const isSelected = uiState.selectedId && (
@@ -842,20 +850,44 @@ export default function BuildingRenderer() {
               };
               const handlePointerOut = (e: any) => {
                 e.stopPropagation();
-                document.body.style.cursor = 'default';
+                document.body.style.cursor = 'auto';
               };
 
-              if (member.type === 'rafter') {
-                const L = member.size[0];
-                const H = member.size[1];
-                const rafterThickness = member.size[2];
-                const theta = member.rotation[2]; // Z rotation is the tilt angle
+              // Render steel ground screws as cylinders
+              if (member.type === 'screw') {
+                const diameter = member.size[0];
+                const length = member.size[1];
+                return (
+                  <mesh
+                    key={member.id}
+                    position={member.position}
+                    rotation={[member.rotation[0], member.rotation[1], member.rotation[2], 'YXZ']}
+                    castShadow
+                    receiveShadow
+                    onClick={handleClick}
+                    onPointerOver={handlePointerOver}
+                    onPointerOut={handlePointerOut}
+                  >
+                    <cylinderGeometry args={[diameter / 2, 0.005, length, 12]} />
+                    <meshStandardMaterial color={memberColor} metalness={0.8} roughness={0.3} />
+                  </mesh>
+                );
+              }
 
-                const rafterShape = new Shape();
-                const halfL = L / 2;
-                const halfH = H / 2;
+              // Special rendering for mitered rafters
+              if (member.type === 'rafter' && member.id.includes('saddle')) {
+                const [width, height, thickness] = member.size;
+                const rafterLength = width;
+                const rafterHeight = height;
+                const rafterThickness = thickness;
+                
+                const theta = roof.inclination * Math.PI / 180;
                 const tanTheta = Math.tan(theta);
-
+                
+                const rafterShape = new Shape();
+                const halfL = rafterLength / 2;
+                const halfH = rafterHeight / 2;
+                
                 rafterShape.moveTo(-halfL - halfH * tanTheta, -halfH);
                 rafterShape.lineTo(halfL - halfH * tanTheta, -halfH);
                 rafterShape.lineTo(halfL + halfH * tanTheta, halfH);

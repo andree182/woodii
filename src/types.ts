@@ -60,10 +60,15 @@ export interface UIState {
   draggedType: 'subObject' | 'wallHandle' | null;
 }
 
+export interface FoundationConfig {
+  type: 'slab' | 'screws';
+}
+
 export interface ProjectState {
   buildingType: BuildingType;
   dimensions: Dimensions;
   floors: Floor[];
   roof: RoofConfig;
+  foundation: FoundationConfig;
   uiState: UIState;
 }

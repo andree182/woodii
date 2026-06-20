@@ -13,11 +13,13 @@ export default function Sidebar() {
     buildingType,
     dimensions,
     roof,
+    foundation,
     uiState,
     floors,
     setBuildingType,
     setDimensions,
     setRoofConfig,
+    setFoundationConfig,
     updateUIState,
     addFloor,
     removeLastFloor,
@@ -37,6 +39,7 @@ export default function Sidebar() {
         buildingType: stateObj.buildingType,
         dimensions: stateObj.dimensions,
         roof: stateObj.roof,
+        foundation: stateObj.foundation,
         floors: stateObj.floors
       }, null, 2)
     );
@@ -116,6 +119,21 @@ export default function Sidebar() {
   framing.forEach(member => {
     const [w, h, d] = member.size;
     const len = Math.max(w, h, d);
+
+    if (member.type === 'screw') {
+      const nominal = "Steel Ground Screw (76x800mm)";
+      const key = `${nominal}-${len.toFixed(2)}`;
+      if (!bomGroups[key]) {
+        bomGroups[key] = {
+          nominal,
+          length: len,
+          count: 0
+        };
+      }
+      bomGroups[key].count++;
+      return;
+    }
+
     const nominal = d > 0.1 || member.type === 'rafter' || member.type === 'ridge' || member.type === 'joist' 
       ? "2x6 (40x140mm)" 
       : "2x4 (40x90mm)";
@@ -147,6 +165,7 @@ export default function Sidebar() {
   let doorCount = 0;
   let windowCount = 0;
   let openingCount = 0;
+  let screwCount = 0;
   floors.forEach(f => {
     f.walls.forEach(w => {
       w.subObjects.forEach(obj => {
@@ -155,6 +174,9 @@ export default function Sidebar() {
         else if (obj.type === 'opening') openingCount++;
       });
     });
+  });
+  framing.forEach(m => {
+    if (m.type === 'screw') screwCount++;
   });
 
   return (
@@ -301,6 +323,27 @@ export default function Sidebar() {
                 />
               </div>
             </div>
+          </section>
+
+          {/* Foundation Config */}
+          <section>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>Foundation</h3>
+            <select
+              value={foundation.type}
+              onChange={(e) => setFoundationConfig({ type: e.target.value as 'slab' | 'screws' })}
+              style={{
+                width: '100%',
+                padding: '10px',
+                backgroundColor: '#1a1a1a',
+                border: '1px solid #444',
+                borderRadius: '6px',
+                color: '#e0e0e0',
+                outline: 'none'
+              }}
+            >
+              <option value="slab">Concrete Slab</option>
+              <option value="screws">Ground Screws Grid</option>
+            </select>
           </section>
 
           {/* Roof Config */}
@@ -938,6 +981,7 @@ export default function Sidebar() {
                       {doorCount > 0 && <li>Doors: {doorCount}</li>}
                       {windowCount > 0 && <li>Windows: {windowCount}</li>}
                       {openingCount > 0 && <li>Empty openings: {openingCount}</li>}
+                      {screwCount > 0 && <li>Ground screws: {screwCount}</li>}
                     </ul>
                   </div>
                 </div>
@@ -946,6 +990,7 @@ export default function Sidebar() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '4px' }}>
                     {floors.map((floor) => {
                       const floorJoists = framing.filter(m => m.floorId === floor.id && m.type === 'joist' && !m.id.startsWith('roof-'));
+                      const foundationScrews = framing.filter(m => m.floorId === floor.id && m.type === 'screw');
                       
                       return (
                         <div key={floor.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -1007,6 +1052,46 @@ export default function Sidebar() {
                                 {isExpanded && (
                                   <div style={{ padding: '10px', backgroundColor: '#151515' }}>
                                     {renderJoistsCutList(floorJoists)}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+
+                          {/* Foundation Screws (Only for Floor 0 if screws foundation) */}
+                          {floor.level === 0 && foundationScrews.length > 0 && (() => {
+                            const isScrewsExpanded = expandedWalls['foundation-screws'];
+                            return (
+                              <div style={{
+                                backgroundColor: '#1e1e1e',
+                                borderRadius: '6px',
+                                border: '1px solid #333',
+                                overflow: 'hidden',
+                              }}>
+                                <div
+                                  onClick={() => setExpandedWalls(prev => ({ ...prev, 'foundation-screws': !prev['foundation-screws'] }))}
+                                  style={{
+                                    padding: '10px 12px',
+                                    backgroundColor: '#2a2a2a',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  <div>
+                                    <strong style={{ fontSize: '11px', color: '#eee' }}>Ground Screws Foundation</strong>
+                                    <span style={{ fontSize: '10px', color: '#888', marginLeft: '8px' }}>
+                                      ({foundationScrews.length} screws)
+                                    </span>
+                                  </div>
+                                  <span style={{ fontSize: '10px', color: '#ff8c00' }}>
+                                    {isScrewsExpanded ? '▲ Collapse' : '▼ Expand'}
+                                  </span>
+                                </div>
+                                {isScrewsExpanded && (
+                                  <div style={{ padding: '10px', backgroundColor: '#151515' }}>
+                                    {renderScrewsCutList(foundationScrews)}
                                   </div>
                                 )}
                               </div>
@@ -1453,3 +1538,33 @@ const renderRoofCutList = (roofMembers: FramingMember[]) => {
     </div>
   );
 };
+
+const renderScrewsCutList = (screws: FramingMember[]) => {
+  if (screws.length === 0) return null;
+  const firstScrew = screws[0];
+  const diameter = Math.round(firstScrew.size[0] * 1000);
+  const length = Math.round(firstScrew.size[1] * 1000);
+  const dimensionsStr = `${diameter}mm x ${length}mm`;
+  
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid #333', color: '#888' }}>
+            <th style={{ padding: '6px 4px' }}>Component</th>
+            <th style={{ padding: '6px 4px' }}>Dimensions</th>
+            <th style={{ padding: '6px 4px', textAlign: 'right' }}>Qty</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style={{ borderBottom: '1px solid #2a2a2a' }}>
+            <td style={{ padding: '6px 4px', color: '#eee', fontWeight: 600 }}>Steel Ground Screw</td>
+            <td style={{ padding: '6px 4px', color: '#ccc' }}>{dimensionsStr}</td>
+            <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{screws.length}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+};
+

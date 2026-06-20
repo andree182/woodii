@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ProjectState, BuildingType, Dimensions, RoofConfig, UIState, Floor, Wall, SubObject } from './types';
+import { ProjectState, BuildingType, Dimensions, RoofConfig, FoundationConfig, UIState, Floor, Wall, SubObject } from './types';
 
 // Helper to create default walls based on dimensions
 export const createOuterWalls = (width: number, depth: number, thickness = 0.15, level = 0): Wall[] => {
@@ -64,6 +64,7 @@ interface ProjectStore extends ProjectState {
   setBuildingType: (type: BuildingType) => void;
   setDimensions: (dimensions: Partial<Dimensions>) => void;
   setRoofConfig: (config: Partial<RoofConfig>) => void;
+  setFoundationConfig: (config: Partial<FoundationConfig>) => void;
   updateUIState: (state: Partial<UIState>) => void;
   addFloor: () => void;
   removeLastFloor: () => void;
@@ -96,6 +97,9 @@ const INITIAL_PROJECT_STATE = {
     overhang: 0.3,
     thickness: 0.2,
     constructionWidth: 0.1,
+  },
+  foundation: {
+    type: 'slab' as const,
   },
   uiState: {
     selectedId: null,
@@ -272,6 +276,10 @@ export const useProjectStore = create<ProjectStore>((set) => ({
 
   setRoofConfig: (config) => set((state) => ({
     roof: { ...state.roof, ...config }
+  })),
+
+  setFoundationConfig: (config) => set((state) => ({
+    foundation: { ...state.foundation, ...config }
   })),
 
   updateUIState: (uiUpdates) => set((state) => ({
@@ -946,6 +954,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       buildingType: project.buildingType || state.buildingType,
       dimensions: { ...state.dimensions, ...project.dimensions },
       roof: { ...state.roof, ...project.roof },
+      foundation: project.foundation || state.foundation,
       floors: project.floors,
       uiState: { ...state.uiState, selectedId: null, selectedType: null }
     };

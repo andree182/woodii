@@ -2,7 +2,7 @@ import { ProjectState } from '../types';
 
 export interface FramingMember {
   id: string;
-  type: 'stud' | 'plate' | 'joist' | 'rafter' | 'header' | 'sill' | 'ridge';
+  type: 'stud' | 'plate' | 'joist' | 'rafter' | 'header' | 'sill' | 'ridge' | 'screw';
   position: [number, number, number]; // Center in world coordinates [X, Y, Z]
   rotation: [number, number, number]; // Rotation angles [X, Y, Z] in radians
   size: [number, number, number];     // Size dimensions [width, height, depth]
@@ -14,6 +14,43 @@ export function generateFraming(state: ProjectState): FramingMember[] {
   const members: FramingMember[] = [];
   const { width, depth, heightPerFloor } = state.dimensions;
   const totalFloors = state.floors.length;
+
+  // ----------------------------------------------------
+  // 0. GROUND SCREWS GENERATION (If screws foundation)
+  // ----------------------------------------------------
+  if (state.foundation && state.foundation.type === 'screws') {
+    const floor = state.floors[0];
+    if (floor) {
+      const wallThickness = floor.walls[0]?.thickness || 0.15;
+      const outerW = width + wallThickness * 0.70;
+      const outerD = depth + wallThickness * 0.70;
+
+      const spacingLimit = 1.5; // Max 1.5m spacing between screws
+      const numSpacesX = Math.max(1, Math.ceil(outerW / spacingLimit));
+      const numSpacesZ = Math.max(1, Math.ceil(outerD / spacingLimit));
+      const screwCountX = numSpacesX + 1;
+      const screwCountZ = numSpacesZ + 1;
+
+      const screwLength = 0.80; // 800mm length
+      const screwDiameter = 0.08; // 80mm diameter
+      const joistHeight = 0.14;
+
+      for (let i = 0; i < screwCountX; i++) {
+        const sx = -outerW / 2 + (i * (outerW / numSpacesX));
+        for (let j = 0; j < screwCountZ; j++) {
+          const sz = -outerD / 2 + (j * (outerD / numSpacesZ));
+          members.push({
+            id: `foundation-screw-${i}-${j}`,
+            type: 'screw',
+            position: [sx, -joistHeight - screwLength / 2, sz],
+            rotation: [0, 0, 0],
+            size: [screwDiameter, screwLength, screwDiameter],
+            floorId: floor.id,
+          });
+        }
+      }
+    }
+  }
 
   const lumberThickness = 0.04; // 40mm
   const lumberWidth = 0.09;     // 90mm (2x4 standard)
