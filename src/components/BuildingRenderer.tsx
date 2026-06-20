@@ -1,4 +1,4 @@
-import { DoubleSide, Shape, Path, Plane, Vector3 } from 'three';
+import { DoubleSide, FrontSide, Shape, Path, Plane, Vector3 } from 'three';
 import { useProjectStore } from '../store';
 import { Wall, Floor } from '../types';
 import { generateFraming } from '../utils/framingEngine';
@@ -217,21 +217,70 @@ export default function BuildingRenderer() {
 
     return (
       <group key={wallId} position={[startX, level * heightPerFloor, startZ]} rotation={[0, rotationY, 0]}>
-        {/* Wall body with cutouts */}
-        {uiState.seeThroughMode !== 'studsOnly' && (
-          <mesh
-            position={[0, 0, -wall.thickness / 2]}
-            castShadow
-            receiveShadow
-            onClick={(e) => {
-              e.stopPropagation();
-              selectObject(wallId, 'wall');
-            }}
-          >
-            <extrudeGeometry args={[wallShape, { depth: wall.thickness, bevelEnabled: false }]} />
-            <meshStandardMaterial {...matProps} roughness={0.7} />
-          </mesh>
-        )}
+        {/* Wall body with cutouts - 3 Layers (Outer, Middle/Insulation, Inner) */}
+        {uiState.seeThroughMode !== 'studsOnly' && (() => {
+          const T = wall.thickness;
+          const isSelected = uiState.selectedId === wallId;
+          const mode = uiState.seeThroughMode;
+
+          // Layer definitions: [keySuffix, localZOffset, depth, defaultColor, defaultOpacity]
+          const layers = [
+            {
+              suffix: 'outer',
+              zOffset: -T / 2,
+              depth: T * 0.15,
+              color: '#8b5a2b', // Wood siding brown
+              opacity: mode === 'seeThrough' ? 0.15 : 1.0,
+            },
+            {
+              suffix: 'middle',
+              zOffset: -T / 2 + T * 0.15,
+              depth: T * 0.70,
+              color: '#ded29e', // Rockwool insulation yellow
+              opacity: mode === 'seeThrough' ? 0.25 : 1.0,
+            },
+            {
+              suffix: 'inner',
+              zOffset: -T / 2 + T * 0.85,
+              depth: T * 0.15,
+              color: '#e6e6e6', // Drywall off-white
+              opacity: mode === 'seeThrough' ? 0.5 : 1.0,
+            }
+          ];
+
+          return (
+            <group>
+              {layers.map((layer) => {
+                const layerColor = isSelected ? '#ff8c00' : layer.color;
+                const layerOpacity = isSelected ? Math.min(1.0, layer.opacity + 0.15) : layer.opacity;
+                const isTransparent = mode === 'seeThrough';
+
+                return (
+                  <mesh
+                    key={`${wallId}-${layer.suffix}`}
+                    position={[0, 0, layer.zOffset]}
+                    castShadow
+                    receiveShadow
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      selectObject(wallId, 'wall');
+                    }}
+                  >
+                    <extrudeGeometry args={[wallShape, { depth: layer.depth, bevelEnabled: false }]} />
+                    <meshStandardMaterial
+                      color={layerColor}
+                      roughness={0.7}
+                      transparent={isTransparent}
+                      opacity={layerOpacity}
+                      depthWrite={!isTransparent}
+                      side={isTransparent ? DoubleSide : FrontSide}
+                    />
+                  </mesh>
+                );
+              })}
+            </group>
+          );
+        })()}
 
         {/* Drag handle for resizing wall depth/width */}
         {uiState.selectedId === wallId && (
@@ -530,15 +579,62 @@ export default function BuildingRenderer() {
           {!matProps.wireframe && (
             <>
               {/* Front Gable */}
-              <mesh position={[0, topElevation, depth / 2 - wallThickness / 2]} rotation={[0, 0, 0]} castShadow receiveShadow>
-                <extrudeGeometry args={[gableShape, { depth: wallThickness, bevelEnabled: false }]} />
-                <meshStandardMaterial color="#b0a090" roughness={0.7} />
-              </mesh>
+              {(() => {
+                const T = wallThickness;
+                const isSelected = uiState.selectedId === 'roof';
+                const mode = uiState.seeThroughMode;
+                const layers = [
+                  { suffix: 'outer', zOffset: 0, depth: T * 0.15, color: '#8b5a2b', opacity: mode === 'seeThrough' ? 0.15 : 1.0 },
+                  { suffix: 'middle', zOffset: T * 0.15, depth: T * 0.70, color: '#ded29e', opacity: mode === 'seeThrough' ? 0.25 : 1.0 },
+                  { suffix: 'inner', zOffset: T * 0.85, depth: T * 0.15, color: '#e6e6e6', opacity: mode === 'seeThrough' ? 0.5 : 1.0 }
+                ];
+                return (
+                  <group position={[0, topElevation, depth / 2 - T / 2]} rotation={[0, 0, 0]}>
+                    {layers.map((layer) => (
+                      <mesh key={`front-gable-${layer.suffix}`} position={[0, 0, layer.zOffset]} castShadow receiveShadow>
+                        <extrudeGeometry args={[gableShape, { depth: layer.depth, bevelEnabled: false }]} />
+                        <meshStandardMaterial
+                          color={isSelected ? '#ff8c00' : layer.color}
+                          roughness={0.7}
+                          transparent={mode === 'seeThrough'}
+                          opacity={layer.opacity}
+                          depthWrite={mode !== 'seeThrough'}
+                          side={mode === 'seeThrough' ? DoubleSide : FrontSide}
+                        />
+                      </mesh>
+                    ))}
+                  </group>
+                );
+              })()}
+
               {/* Back Gable */}
-              <mesh position={[0, topElevation, -depth / 2 + wallThickness / 2]} rotation={[0, Math.PI, 0]} castShadow receiveShadow>
-                <extrudeGeometry args={[gableShape, { depth: wallThickness, bevelEnabled: false }]} />
-                <meshStandardMaterial color="#b0a090" roughness={0.7} />
-              </mesh>
+              {(() => {
+                const T = wallThickness;
+                const isSelected = uiState.selectedId === 'roof';
+                const mode = uiState.seeThroughMode;
+                const layers = [
+                  { suffix: 'outer', zOffset: 0, depth: T * 0.15, color: '#8b5a2b', opacity: mode === 'seeThrough' ? 0.15 : 1.0 },
+                  { suffix: 'middle', zOffset: T * 0.15, depth: T * 0.70, color: '#ded29e', opacity: mode === 'seeThrough' ? 0.25 : 1.0 },
+                  { suffix: 'inner', zOffset: T * 0.85, depth: T * 0.15, color: '#e6e6e6', opacity: mode === 'seeThrough' ? 0.5 : 1.0 }
+                ];
+                return (
+                  <group position={[0, topElevation, -depth / 2 + T / 2]} rotation={[0, Math.PI, 0]}>
+                    {layers.map((layer) => (
+                      <mesh key={`back-gable-${layer.suffix}`} position={[0, 0, layer.zOffset]} castShadow receiveShadow>
+                        <extrudeGeometry args={[gableShape, { depth: layer.depth, bevelEnabled: false }]} />
+                        <meshStandardMaterial
+                          color={isSelected ? '#ff8c00' : layer.color}
+                          roughness={0.7}
+                          transparent={mode === 'seeThrough'}
+                          opacity={layer.opacity}
+                          depthWrite={mode !== 'seeThrough'}
+                          side={mode === 'seeThrough' ? DoubleSide : FrontSide}
+                        />
+                      </mesh>
+                    ))}
+                  </group>
+                );
+              })()}
             </>
           )}
         </group>
