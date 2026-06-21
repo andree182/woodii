@@ -1,11 +1,11 @@
-import { useState, ChangeEvent } from 'react';
+import { useState, ChangeEvent, useEffect } from 'react';
 import { useProjectStore } from '../store';
 
 import { generateFraming, FramingMember } from '../utils/framingEngine';
 import { DEMO_PROJECTS } from '../utils/demos';
 
 export default function Sidebar() {
-  const [activeTab, setActiveTab] = useState<'design' | 'bom'>('design');
+  const [activeTab, setActiveTab] = useState<'projects' | 'global' | 'selection' | 'bom'>('projects');
   const [bomViewMode, setBomViewMode] = useState<'global' | 'walls'>('walls');
   const [expandedWalls, setExpandedWalls] = useState<{[key: string]: boolean}>({});
 
@@ -30,7 +30,6 @@ export default function Sidebar() {
     addInternalWall,
     removeInternalWall,
     updateInternalWall,
-    updateUIState,
     addFloor,
     removeLastFloor,
     selectObject,
@@ -81,6 +80,22 @@ export default function Sidebar() {
 
   const selectedId = uiState.selectedId;
   const selectedType = uiState.selectedType;
+
+  // Automatically switch to selection tab when any element (wall, door/window, floor, roof) is clicked/selected
+  useEffect(() => {
+    if (selectedType && selectedType !== null) {
+      setActiveTab('selection');
+    }
+  }, [selectedId, selectedType]);
+
+  // Automatically switch to global tab if building/wall dimensions are being edited (e.g. via wall dragging handles)
+  const isDragging = uiState.isDragging;
+  const draggedType = uiState.draggedType;
+  useEffect(() => {
+    if (isDragging && draggedType === 'wallHandle') {
+      setActiveTab('global');
+    }
+  }, [isDragging, draggedType]);
 
   // Find currently selected object if any
   let selectedWall: any = null;
@@ -138,6 +153,12 @@ export default function Sidebar() {
   const handleDimensionChange = (key: 'width' | 'depth' | 'heightPerFloor', val: number) => {
     if (val > 0) {
       setDimensions({ [key]: val });
+    }
+  };
+
+  const handleWallLayerChange = (key: 'outer' | 'middle' | 'inner', val: number) => {
+    if (val >= 0) {
+      setWallLayers({ [key]: val });
     }
   };
 
@@ -248,44 +269,39 @@ export default function Sidebar() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid #333', backgroundColor: '#1a1a1a' }}>
-        <button
-          onClick={() => setActiveTab('design')}
-          style={{
-            flex: 1,
-            padding: '12px',
-            backgroundColor: activeTab === 'design' ? '#242424' : 'transparent',
-            border: 'none',
-            borderBottom: activeTab === 'design' ? '2px solid #ff8c00' : 'none',
-            color: activeTab === 'design' ? '#fff' : '#888',
-            fontWeight: 600,
-            cursor: 'pointer',
-            fontSize: '13px'
-          }}
-        >
-          Design
-        </button>
-        <button
-          onClick={() => setActiveTab('bom')}
-          style={{
-            flex: 1,
-            padding: '12px',
-            backgroundColor: activeTab === 'bom' ? '#242424' : 'transparent',
-            border: 'none',
-            borderBottom: activeTab === 'bom' ? '2px solid #ff8c00' : 'none',
-            color: activeTab === 'bom' ? '#fff' : '#888',
-            fontWeight: 600,
-            cursor: 'pointer',
-            fontSize: '13px'
-          }}
-        >
-          Bill of Materials
-        </button>
+      <div style={{ display: 'flex', borderBottom: '1px solid #333', backgroundColor: '#1a1a1a', overflowX: 'auto' }}>
+        {([
+          { id: 'projects', label: 'Projects' },
+          { id: 'global', label: 'Global' },
+          { id: 'selection', label: 'Selection' },
+          { id: 'bom', label: 'BOM' }
+        ] as const).map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              flex: 1,
+              padding: '12px 4px',
+              backgroundColor: activeTab === tab.id ? '#242424' : 'transparent',
+              border: 'none',
+              borderBottom: activeTab === tab.id ? '2px solid #ff8c00' : 'none',
+              color: activeTab === tab.id ? '#fff' : '#888',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontSize: '11px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.03em',
+              textAlign: 'center',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {activeTab === 'design' && (
+      {activeTab === 'projects' && (
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* Project controls */}
           {/* Project Persistence */}
           <section style={{ backgroundColor: '#1e1e1e', padding: '16px', borderRadius: '8px', border: '1px solid #333' }}>
             <h3 style={{ margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>
@@ -361,7 +377,11 @@ export default function Sidebar() {
               </label>
             </div>
           </section>
+        </div>
+      )}
 
+      {activeTab === 'global' && (
+        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Footprint dimensions */}
           <section>
             <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>Dimensions</h3>
@@ -439,7 +459,8 @@ export default function Sidebar() {
                 border: '1px solid #444',
                 borderRadius: '6px',
                 color: '#e0e0e0',
-                outline: 'none'
+                outline: 'none',
+                fontSize: '12px'
               }}
             >
               <option value="slab">Concrete Slab</option>
@@ -458,7 +479,7 @@ export default function Sidebar() {
                   value={wallPreset}
                   onChange={(e) => setWallPreset(e.target.value as any)}
                   style={{
-                    width: '120px',
+                    width: '60%',
                     padding: '6px',
                     backgroundColor: '#1a1a1a',
                     border: '1px solid #444',
@@ -468,101 +489,92 @@ export default function Sidebar() {
                     outline: 'none'
                   }}
                 >
-                  <option value="custom">Custom</option>
+                  <option value="custom">Custom Layers</option>
                   <option value="diffusion_open">Diffusion-Open</option>
                   <option value="diffusion_closed">Diffusion-Closed</option>
                 </select>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <label style={{ fontSize: '11px', color: '#ccc' }}>Outer Siding (m):</label>
-                <input
-                  type="number"
-                  step="0.005"
-                  min="0.005"
-                  max="0.10"
-                  value={wallLayers.outer}
-                  disabled={wallPreset !== 'custom'}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value) || 0.02;
-                    setWallLayers({ outer: val });
-                  }}
-                  style={{
-                    width: '80px',
-                    padding: '6px',
-                    backgroundColor: '#1a1a1a',
-                    border: '1px solid #444',
-                    borderRadius: '6px',
-                    color: '#fff',
-                    fontSize: '11px',
-                    outline: 'none',
-                    textAlign: 'right',
-                    opacity: wallPreset !== 'custom' ? 0.5 : 1,
-                    cursor: wallPreset !== 'custom' ? 'not-allowed' : 'text'
-                  }}
-                />
-              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginTop: '4px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '9px', color: '#888', marginBottom: '2px' }}>Outer (m)</label>
+                  <input
+                    type="number"
+                    step="0.005"
+                    min="0"
+                    max="0.1"
+                    value={wallLayers.outer}
+                    onChange={(e) => handleWallLayerChange('outer', parseFloat(e.target.value))}
+                    disabled={wallPreset !== 'custom'}
+                    style={{
+                      width: '100%',
+                      padding: '6px',
+                      backgroundColor: '#1a1a1a',
+                      border: '1px solid #444',
+                      borderRadius: '6px',
+                      color: '#fff',
+                      fontSize: '11px',
+                      outline: 'none',
+                      textAlign: 'right',
+                      opacity: wallPreset !== 'custom' ? 0.5 : 1,
+                      cursor: wallPreset !== 'custom' ? 'not-allowed' : 'text'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '9px', color: '#888', marginBottom: '2px' }}>Middle (m)</label>
+                  <input
+                    type="number"
+                    step="0.005"
+                    min="0.04"
+                    max="0.25"
+                    value={wallLayers.middle}
+                    onChange={(e) => handleWallLayerChange('middle', parseFloat(e.target.value))}
+                    disabled={wallPreset !== 'custom'}
+                    style={{
+                      width: '100%',
+                      padding: '6px',
+                      backgroundColor: '#1a1a1a',
+                      border: '1px solid #444',
+                      borderRadius: '6px',
+                      color: '#fff',
+                      fontSize: '11px',
+                      outline: 'none',
+                      textAlign: 'right',
+                      opacity: wallPreset !== 'custom' ? 0.5 : 1,
+                      cursor: wallPreset !== 'custom' ? 'not-allowed' : 'text'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '9px', color: '#888', marginBottom: '2px' }}>Inner (m)</label>
+                  <input
+                    type="number"
+                    step="0.005"
+                    min="0"
+                    max="0.1"
+                    value={wallLayers.inner}
+                    onChange={(e) => handleWallLayerChange('inner', parseFloat(e.target.value))}
+                    disabled={wallPreset !== 'custom'}
+                    style={{
+                      width: '100%',
+                      padding: '6px',
+                      backgroundColor: '#1a1a1a',
+                      border: '1px solid #444',
+                      borderRadius: '6px',
+                      color: '#fff',
+                      fontSize: '11px',
+                      outline: 'none',
+                      textAlign: 'right',
+                      opacity: wallPreset !== 'custom' ? 0.5 : 1,
+                      cursor: wallPreset !== 'custom' ? 'not-allowed' : 'text'
+                    }}
+                  />
+                </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <label style={{ fontSize: '11px', color: '#ccc' }}>Stud Core (Middle) (m):</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.04"
-                  max="0.30"
-                  value={wallLayers.middle}
-                  disabled={wallPreset !== 'custom'}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value) || 0.10;
-                    setWallLayers({ middle: val });
-                  }}
-                  style={{
-                    width: '80px',
-                    padding: '6px',
-                    backgroundColor: '#1a1a1a',
-                    border: '1px solid #444',
-                    borderRadius: '6px',
-                    color: '#fff',
-                    fontSize: '11px',
-                    outline: 'none',
-                    textAlign: 'right',
-                    opacity: wallPreset !== 'custom' ? 0.5 : 1,
-                    cursor: wallPreset !== 'custom' ? 'not-allowed' : 'text'
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <label style={{ fontSize: '11px', color: '#ccc' }}>Inner Drywall (m):</label>
-                <input
-                  type="number"
-                  step="0.005"
-                  min={wallPreset === 'custom' ? 0.005 : 0}
-                  max="0.10"
-                  value={wallLayers.inner}
-                  disabled={wallPreset !== 'custom'}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value) || 0.03;
-                    setWallLayers({ inner: val });
-                  }}
-                  style={{
-                    width: '80px',
-                    padding: '6px',
-                    backgroundColor: '#1a1a1a',
-                    border: '1px solid #444',
-                    borderRadius: '6px',
-                    color: '#fff',
-                    fontSize: '11px',
-                    outline: 'none',
-                    textAlign: 'right',
-                    opacity: wallPreset !== 'custom' ? 0.5 : 1,
-                    cursor: wallPreset !== 'custom' ? 'not-allowed' : 'text'
-                  }}
-                />
-              </div>
-
-              <div style={{ fontSize: '10px', color: '#888', borderTop: '1px solid #2a2a2a', paddingTop: '6px', marginTop: '4px' }}>
-                Total wall thickness: <strong>{(wallLayers.outer + wallLayers.middle + wallLayers.inner).toFixed(3)}m</strong>
+                <div style={{ fontSize: '10px', color: '#888', borderTop: '1px solid #2a2a2a', paddingTop: '6px', marginTop: '4px' }}>
+                  Total wall thickness: <strong>{(wallLayers.outer + wallLayers.middle + wallLayers.inner).toFixed(3)}m</strong>
+                </div>
               </div>
             </div>
           </section>
@@ -598,116 +610,9 @@ export default function Sidebar() {
             </div>
           </section>
 
-          {/* Roof Config */}
-          <section>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>Roof Config</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Inclination (°)</label>
-                <input
-                  type="number"
-                  min="5"
-                  max="60"
-                  value={roof.inclination}
-                  onChange={(e) => handleRoofChange('inclination', parseInt(e.target.value))}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    backgroundColor: '#1a1a1a',
-                    border: '1px solid #444',
-                    borderRadius: '6px',
-                    color: '#e0e0e0'
-                  }}
-                />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Overhang (m)</label>
-                  <input
-                    type="number"
-                    step="0.05"
-                    min="0"
-                    max="1.5"
-                    value={roof.overhang}
-                    onChange={(e) => handleRoofChange('overhang', parseFloat(e.target.value))}
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      backgroundColor: '#1a1a1a',
-                      border: '1px solid #444',
-                      borderRadius: '6px',
-                      color: '#e0e0e0'
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Thickness (m)</label>
-                  <input
-                    type="number"
-                    step="0.05"
-                    min="0.05"
-                    max="0.5"
-                    value={roof.thickness}
-                    onChange={(e) => handleRoofChange('thickness', parseFloat(e.target.value))}
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      backgroundColor: '#1a1a1a',
-                      border: '1px solid #444',
-                      borderRadius: '6px',
-                      color: '#e0e0e0'
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          </section>
-
           {/* Floors */}
           <section>
             <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>Floors ({floors.length})</h3>
-            
-            <div style={{ marginBottom: '12px' }}>
-              <span style={{ fontSize: '11px', color: '#888', display: 'block', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Active Floor View:</span>
-              <div style={{ display: 'flex', gap: '4px', backgroundColor: '#1a1a1a', padding: '4px', borderRadius: '8px', flexWrap: 'wrap' }}>
-                <button
-                  onClick={() => updateUIState({ currentFloorView: -1 })}
-                  style={{
-                    flex: '1 1 auto',
-                    padding: '6px 4px',
-                    fontSize: '11px',
-                    backgroundColor: uiState.currentFloorView === -1 ? '#ff8c00' : 'transparent',
-                    border: 'none',
-                    borderRadius: '6px',
-                    color: uiState.currentFloorView === -1 ? '#000' : '#888',
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
-                >
-                  All Floors
-                </button>
-                {floors.map((floor) => (
-                  <button
-                    key={floor.id}
-                    onClick={() => updateUIState({ currentFloorView: floor.level })}
-                    style={{
-                      flex: '1 1 auto',
-                      padding: '6px 4px',
-                      fontSize: '11px',
-                      backgroundColor: uiState.currentFloorView === floor.level ? '#ff8c00' : 'transparent',
-                      border: 'none',
-                      borderRadius: '6px',
-                      color: uiState.currentFloorView === floor.level ? '#000' : '#888',
-                      fontWeight: 600,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Lvl {floor.level}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
                 onClick={addFloor}
@@ -743,70 +648,34 @@ export default function Sidebar() {
             </div>
           </section>
 
-          {/* View Mode controls */}
-          <section>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>View Mode</h3>
-            <div style={{ display: 'flex', gap: '4px', backgroundColor: '#1a1a1a', padding: '4px', borderRadius: '8px' }}>
-              {(['solid', 'seeThrough', 'studsOnly'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => updateUIState({ seeThroughMode: mode })}
-                  style={{
-                    flex: 1,
-                    padding: '6px 4px',
-                    fontSize: '11px',
-                    backgroundColor: uiState.seeThroughMode === mode ? '#ff8c00' : 'transparent',
-                    border: 'none',
-                    borderRadius: '6px',
-                    color: uiState.seeThroughMode === mode ? '#000' : '#888',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    textTransform: 'capitalize'
-                  }}
-                >
-                  {mode === 'seeThrough' ? 'Transp.' : mode === 'studsOnly' ? 'Wireframe' : 'Solid'}
-                </button>
-              ))}
-            </div>
-          </section>
+          {/* Global Reset */}
+          <button
+            onClick={resetProject}
+            style={{
+              padding: '8px',
+              backgroundColor: 'transparent',
+              border: '1px solid #555',
+              borderRadius: '6px',
+              color: '#888',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: 500,
+              marginTop: '20px'
+            }}
+          >
+            Reset Project
+          </button>
+        </div>
+      )}
 
-          {/* Camera View controls */}
-          <section style={{ marginTop: '10px' }}>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>Camera View</h3>
-            <div style={{ display: 'flex', gap: '4px', backgroundColor: '#1a1a1a', padding: '4px', borderRadius: '8px' }}>
-              {([
-                { id: '3D', label: '3D Orbit' },
-                { id: 'topDown', label: 'Top-down' },
-                { id: 'walking', label: 'Walking' }
-              ] as const).map((mode) => (
-                <button
-                  key={mode.id}
-                  onClick={() => updateUIState({ viewMode: mode.id })}
-                  style={{
-                    flex: 1,
-                    padding: '6px 4px',
-                    fontSize: '11px',
-                    backgroundColor: (uiState.viewMode || '3D') === mode.id ? '#ff8c00' : 'transparent',
-                    border: 'none',
-                    borderRadius: '6px',
-                    color: (uiState.viewMode || '3D') === mode.id ? '#000' : '#888',
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
-                >
-                  {mode.label}
-                </button>
-              ))}
-            </div>
-          </section>
-
+      {activeTab === 'selection' && (
+        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Selected Details Panel */}
           <section style={{
             backgroundColor: '#1e1e1e',
             padding: '16px',
             borderRadius: '8px',
-            border: '1px solid #333',
-            minHeight: '120px'
+            border: '1px solid #333'
           }}>
             <h3 style={{ margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', color: '#888' }}>
               Selection Properties
@@ -838,135 +707,73 @@ export default function Sidebar() {
                 {selectedType === 'wall' && selectedWall && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <p style={{ margin: 0, fontSize: '12px', color: '#aaa' }}>
-                      Wall coordinates: [{selectedWall.start.map((coord: number) => coord.toFixed(2)).join(', ')}] to [{selectedWall.end.map((coord: number) => coord.toFixed(2)).join(', ')}]
+                      Wall length: <strong>{Math.sqrt(Math.pow(selectedWall.end[0]-selectedWall.start[0], 2) + Math.pow(selectedWall.end[1]-selectedWall.start[1], 2)).toFixed(2)}m</strong>
                     </p>
-                    <div style={{ fontSize: '11px', color: '#888' }}>
-                      Thickness: <strong>{selectedWall.thickness.toFixed(2)}m</strong>
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
-                      <button
-                        onClick={() => addSubObject(selectedId, 'door')}
-                        style={{
-                          flex: '1 1 0px',
-                          padding: '6px',
-                          backgroundColor: '#ff8c00',
-                          color: '#000',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          minWidth: '75px'
-                        }}
-                      >
-                        + Door
-                      </button>
-                      <button
-                        onClick={() => addSubObject(selectedId, 'window')}
-                        style={{
-                          flex: '1 1 0px',
-                          padding: '6px',
-                          backgroundColor: '#ff8c00',
-                          color: '#000',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          minWidth: '75px'
-                        }}
-                      >
-                        + Window
-                      </button>
-                      <button
-                        onClick={() => addSubObject(selectedId, 'opening')}
-                        style={{
-                          flex: '1 1 0px',
-                          padding: '6px',
-                          backgroundColor: '#ff8c00',
-                          color: '#000',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          minWidth: '75px'
-                        }}
-                      >
-                        + Opening
-                      </button>
+                    <p style={{ margin: 0, fontSize: '12px', color: '#aaa' }}>
+                      Wall thickness: <strong>{selectedWall.thickness.toFixed(2)}m</strong>
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', borderTop: '1px solid #333', paddingTop: '8px' }}>
+                      <span style={{ fontSize: '10px', color: '#888', textTransform: 'uppercase', fontWeight: 600 }}>Add Openings:</span>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+                        <button
+                          onClick={() => addSubObject(selectedId, 'door')}
+                          style={{
+                            padding: '6px',
+                            backgroundColor: '#2a2a2a',
+                            color: '#ccc',
+                            border: '1px solid #444',
+                            borderRadius: '4px',
+                            fontSize: '10px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          + Door
+                        </button>
+                        <button
+                          onClick={() => addSubObject(selectedId, 'window')}
+                          style={{
+                            padding: '6px',
+                            backgroundColor: '#2a2a2a',
+                            color: '#ccc',
+                            border: '1px solid #444',
+                            borderRadius: '4px',
+                            fontSize: '10px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          + Window
+                        </button>
+                        <button
+                          onClick={() => addSubObject(selectedId, 'opening')}
+                          style={{
+                            padding: '6px',
+                            backgroundColor: '#2a2a2a',
+                            color: '#ccc',
+                            border: '1px solid #444',
+                            borderRadius: '4px',
+                            fontSize: '10px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          + Passage
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
-
                 {selectedType === 'wall' && selectedInternalWall && (() => {
                   const wall = selectedInternalWall;
-                  const floor = floors.find(f => (f.internalWalls || []).some(w => w.id === wall.id));
+                  const floor = floors.find(f => (f.internalWalls || []).some(w => w.id === selectedId));
                   if (!floor) return null;
-                  
                   const length = Math.sqrt(
                     Math.pow(wall.end[0] - wall.start[0], 2) +
                     Math.pow(wall.end[1] - wall.start[1], 2)
                   );
-
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       <p style={{ margin: 0, fontSize: '12px', color: '#aaa' }}>
-                        Partition Wall coordinates: [{wall.start.map((coord: number) => coord.toFixed(2)).join(', ')}] to [{wall.end.map((coord: number) => coord.toFixed(2)).join(', ')}]
+                        Internal Wall Length: <strong>{length.toFixed(2)}m</strong>
                       </p>
-                      <div style={{ fontSize: '11px', color: '#888' }}>
-                        Length: <strong>{length.toFixed(2)}m</strong>
-                      </div>
-
-                      {/* Coordinates Edit */}
-                      <div style={{ borderTop: '1px solid #333', paddingTop: '10px', marginTop: '6px' }}>
-                        <h4 style={{ margin: '0 0 8px 0', fontSize: '11px', color: '#ff8c00', textTransform: 'uppercase' }}>Coordinates</h4>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                          <div>
-                            <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Start X (m)</label>
-                            <input
-                              type="number"
-                              step="0.05"
-                              value={wall.start[0]}
-                              onChange={(e) => updateInternalWall(floor.id, wall.id, { start: [parseFloat(e.target.value) || 0, wall.start[1]] })}
-                              style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
-                            />
-                          </div>
-                          <div>
-                            <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Start Z (m)</label>
-                            <input
-                              type="number"
-                              step="0.05"
-                              value={wall.start[1]}
-                              onChange={(e) => updateInternalWall(floor.id, wall.id, { start: [wall.start[0], parseFloat(e.target.value) || 0] })}
-                              style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
-                            />
-                          </div>
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                          <div>
-                            <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>End X (m)</label>
-                            <input
-                              type="number"
-                              step="0.05"
-                              value={wall.end[0]}
-                              onChange={(e) => updateInternalWall(floor.id, wall.id, { end: [parseFloat(e.target.value) || 0, wall.end[1]] })}
-                              style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
-                            />
-                          </div>
-                          <div>
-                            <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>End Z (m)</label>
-                            <input
-                              type="number"
-                              step="0.05"
-                              value={wall.end[1]}
-                              onChange={(e) => updateInternalWall(floor.id, wall.id, { end: [wall.end[0], parseFloat(e.target.value) || 0] })}
-                              style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
                       {/* Timber Configuration */}
                       <div style={{ borderTop: '1px solid #333', paddingTop: '10px', marginTop: '6px' }}>
                         <h4 style={{ margin: '0 0 8px 0', fontSize: '11px', color: '#ff8c00', textTransform: 'uppercase' }}>Timber & Lining</h4>
@@ -1413,6 +1220,79 @@ export default function Sidebar() {
                 })()}
               </div>
             )}
+          </section>
+
+          {/* Roof Config (Always Visible inside Selection Editor Tab) */}
+          <section style={{
+            backgroundColor: '#1e1e1e',
+            padding: '16px',
+            borderRadius: '8px',
+            border: '1px solid #333'
+          }}>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>Roof Config</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Inclination (°)</label>
+                <input
+                  type="number"
+                  min="5"
+                  max="60"
+                  value={roof.inclination}
+                  onChange={(e) => handleRoofChange('inclination', parseInt(e.target.value) || 0)}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    backgroundColor: '#1a1a1a',
+                    border: '1px solid #444',
+                    borderRadius: '6px',
+                    color: '#e0e0e0',
+                    fontSize: '12px'
+                  }}
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Overhang (m)</label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    min="0"
+                    max="1.5"
+                    value={roof.overhang}
+                    onChange={(e) => handleRoofChange('overhang', parseFloat(e.target.value) || 0)}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      backgroundColor: '#1a1a1a',
+                      border: '1px solid #444',
+                      borderRadius: '6px',
+                      color: '#e0e0e0',
+                      fontSize: '12px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Thickness (m)</label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    min="0.05"
+                    max="0.5"
+                    value={roof.thickness}
+                    onChange={(e) => handleRoofChange('thickness', parseFloat(e.target.value) || 0)}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      backgroundColor: '#1a1a1a',
+                      border: '1px solid #444',
+                      borderRadius: '6px',
+                      color: '#e0e0e0',
+                      fontSize: '12px'
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
           </section>
 
           {/* Global Reset */}

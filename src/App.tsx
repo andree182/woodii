@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import ThreeCanvas from './components/ThreeCanvas';
 import Sidebar from './components/Sidebar';
+import FloatingViewControls from './components/FloatingViewControls';
 import { useProjectStore } from './store';
 
 function App() {
@@ -55,8 +56,9 @@ function App() {
       backgroundColor: '#111'
     }}>
       {/* 3D Canvas occupy all remaining space */}
-      <div style={{ flex: 1, height: '100%' }}>
+      <div style={{ flex: 1, height: '100%', position: 'relative' }}>
         <ThreeCanvas />
+        <FloatingViewControls />
       </div>
       
       {/* Controls sidebar */}
