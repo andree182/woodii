@@ -1,7 +1,8 @@
 import { useState, ChangeEvent } from 'react';
 import { useProjectStore } from '../store';
-import { BuildingType } from '../types';
+
 import { generateFraming, FramingMember } from '../utils/framingEngine';
+import { DEMO_PROJECTS } from '../utils/demos';
 
 export default function Sidebar() {
   const [activeTab, setActiveTab] = useState<'design' | 'bom'>('design');
@@ -10,7 +11,7 @@ export default function Sidebar() {
 
 
   const {
-    buildingType,
+
     dimensions,
     roof,
     foundation,
@@ -19,7 +20,7 @@ export default function Sidebar() {
     structuralConfig,
     uiState,
     floors,
-    setBuildingType,
+
     setDimensions,
     setRoofConfig,
     setFoundationConfig,
@@ -199,6 +200,16 @@ export default function Sidebar() {
     return b.length - a.length;
   });
 
+  const bomListWithIds = bomList.map((item, index) => ({
+    ...item,
+    idNum: `#${index + 1}`
+  }));
+
+  const getCutIdentifier = (nominal: string, length: number) => {
+    const found = bomListWithIds.find(item => item.nominal === nominal && item.length.toFixed(2) === length.toFixed(2));
+    return found ? found.idNum : '';
+  };
+
   let doorCount = 0;
   let windowCount = 0;
   let openingCount = 0;
@@ -275,27 +286,80 @@ export default function Sidebar() {
       {activeTab === 'design' && (
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Project controls */}
-          <section>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>Building Type</h3>
-            <select
-              value={buildingType}
-              onChange={(e) => setBuildingType(e.target.value as BuildingType)}
-              style={{
+          {/* Project Persistence */}
+          <section style={{ backgroundColor: '#1e1e1e', padding: '16px', borderRadius: '8px', border: '1px solid #333' }}>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>
+              Project Persistence
+            </h3>
+            
+            {/* Demo Projects selector */}
+            <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <span style={{ fontSize: '10px', color: '#888', textTransform: 'uppercase', fontWeight: 600 }}>Load Demo Templates:</span>
+              {Object.entries(DEMO_PROJECTS).map(([key, demo]) => (
+                <button
+                  key={key}
+                  onClick={() => loadProject(demo.project)}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    backgroundColor: '#111',
+                    color: '#fff',
+                    border: '1px solid #333',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#222')}
+                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#111')}
+                >
+                  ⚡ {demo.name}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                onClick={handleSaveProject}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  backgroundColor: '#ff8c00',
+                  color: '#000',
+                  fontWeight: 600,
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px'
+                }}
+              >
+                Save Project (JSON)
+              </button>
+              
+              <label style={{
+                display: 'block',
                 width: '100%',
                 padding: '10px',
-                backgroundColor: '#1a1a1a',
-                border: '1px solid #444',
+                backgroundColor: '#2e7d32',
+                color: '#fff',
+                fontWeight: 600,
+                textAlign: 'center',
+                boxSizing: 'border-box',
                 borderRadius: '6px',
-                color: '#e0e0e0',
-                outline: 'none'
-              }}
-            >
-              <option value="garden_saddle">Garden House (Saddle Roof)</option>
-              <option value="garden_flat">Garden House (Flat Roof)</option>
-              <option value="playhouse">Kids Playhouse</option>
-              <option value="henhouse">Henhouse</option>
-              <option value="tiny_house">Tiny House</option>
-            </select>
+                cursor: 'pointer',
+                fontSize: '12px'
+              }}>
+                Load Project (JSON)
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleLoadProject}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            </div>
           </section>
 
           {/* Footprint dimensions */}
@@ -602,6 +666,48 @@ export default function Sidebar() {
           {/* Floors */}
           <section>
             <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>Floors ({floors.length})</h3>
+            
+            <div style={{ marginBottom: '12px' }}>
+              <span style={{ fontSize: '11px', color: '#888', display: 'block', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Active Floor View:</span>
+              <div style={{ display: 'flex', gap: '4px', backgroundColor: '#1a1a1a', padding: '4px', borderRadius: '8px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => updateUIState({ currentFloorView: -1 })}
+                  style={{
+                    flex: '1 1 auto',
+                    padding: '6px 4px',
+                    fontSize: '11px',
+                    backgroundColor: uiState.currentFloorView === -1 ? '#ff8c00' : 'transparent',
+                    border: 'none',
+                    borderRadius: '6px',
+                    color: uiState.currentFloorView === -1 ? '#000' : '#888',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  All Floors
+                </button>
+                {floors.map((floor) => (
+                  <button
+                    key={floor.id}
+                    onClick={() => updateUIState({ currentFloorView: floor.level })}
+                    style={{
+                      flex: '1 1 auto',
+                      padding: '6px 4px',
+                      fontSize: '11px',
+                      backgroundColor: uiState.currentFloorView === floor.level ? '#ff8c00' : 'transparent',
+                      border: 'none',
+                      borderRadius: '6px',
+                      color: uiState.currentFloorView === floor.level ? '#000' : '#888',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Lvl {floor.level}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
                 onClick={addFloor}
@@ -659,6 +765,36 @@ export default function Sidebar() {
                   }}
                 >
                   {mode === 'seeThrough' ? 'Transp.' : mode === 'studsOnly' ? 'Wireframe' : 'Solid'}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {/* Camera View controls */}
+          <section style={{ marginTop: '10px' }}>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>Camera View</h3>
+            <div style={{ display: 'flex', gap: '4px', backgroundColor: '#1a1a1a', padding: '4px', borderRadius: '8px' }}>
+              {([
+                { id: '3D', label: '3D Orbit' },
+                { id: 'topDown', label: 'Top-down' },
+                { id: 'walking', label: 'Walking' }
+              ] as const).map((mode) => (
+                <button
+                  key={mode.id}
+                  onClick={() => updateUIState({ viewMode: mode.id })}
+                  style={{
+                    flex: 1,
+                    padding: '6px 4px',
+                    fontSize: '11px',
+                    backgroundColor: (uiState.viewMode || '3D') === mode.id ? '#ff8c00' : 'transparent',
+                    border: 'none',
+                    borderRadius: '6px',
+                    color: (uiState.viewMode || '3D') === mode.id ? '#000' : '#888',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {mode.label}
                 </button>
               ))}
             </div>
@@ -1301,52 +1437,7 @@ export default function Sidebar() {
 
       {activeTab === 'bom' && (
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Save/Load Persistence */}
-          <section style={{ backgroundColor: '#1e1e1e', padding: '16px', borderRadius: '8px', border: '1px solid #333' }}>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>
-              Project Persistence
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <button
-                onClick={handleSaveProject}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  backgroundColor: '#ff8c00',
-                  color: '#000',
-                  fontWeight: 600,
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '12px'
-                }}
-              >
-                Save Project (JSON)
-              </button>
-              
-              <label style={{
-                display: 'block',
-                width: '100%',
-                padding: '10px',
-                backgroundColor: '#2e7d32',
-                color: '#fff',
-                fontWeight: 600,
-                textAlign: 'center',
-                boxSizing: 'border-box',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '12px'
-              }}>
-                Load Project (JSON)
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={handleLoadProject}
-                  style={{ display: 'none' }}
-                />
-              </label>
-            </div>
-          </section>
+
 
           {/* Material Take-off List */}
           <section style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -1484,7 +1575,7 @@ export default function Sidebar() {
                                 </div>
                                 {isExpanded && (
                                   <div style={{ padding: '10px', backgroundColor: '#151515' }}>
-                                    {renderJoistsCutList(floorJoists)}
+                                    {renderJoistsCutList(floorJoists, getCutIdentifier)}
                                   </div>
                                 )}
                               </div>
@@ -1524,7 +1615,7 @@ export default function Sidebar() {
                                 </div>
                                 {isScrewsExpanded && (
                                   <div style={{ padding: '10px', backgroundColor: '#151515' }}>
-                                    {renderScrewsCutList(foundationScrews)}
+                                    {renderScrewsCutList(foundationScrews, getCutIdentifier)}
                                   </div>
                                 )}
                               </div>
@@ -1599,7 +1690,7 @@ export default function Sidebar() {
                                     {wallMembers.length === 0 ? (
                                       <p style={{ fontSize: '11px', color: '#666', fontStyle: 'italic', margin: 0 }}>No framing generated for this wall.</p>
                                     ) : (
-                                      renderWallFramingCutList(wallMembers, wall)
+                                      renderWallFramingCutList(wallMembers, wall, getCutIdentifier)
                                     )}
                                   </div>
                                 )}
@@ -1670,7 +1761,7 @@ export default function Sidebar() {
                             </div>
                             {isExpanded && (
                               <div style={{ padding: '10px', backgroundColor: '#151515' }}>
-                                {renderRoofCutList(roofMembers)}
+                                {renderRoofCutList(roofMembers, getCutIdentifier)}
                               </div>
                             )}
                           </div>
@@ -1691,9 +1782,12 @@ export default function Sidebar() {
                         </tr>
                       </thead>
                       <tbody>
-                        {bomList.map((item, idx) => (
+                        {bomListWithIds.map((item, idx) => (
                           <tr key={idx} style={{ borderBottom: '1px solid #2a2a2a' }}>
-                            <td style={{ padding: '6px 4px', color: '#e0e0e0' }}>{item.nominal}</td>
+                            <td style={{ padding: '6px 4px', color: '#e0e0e0' }}>
+                              <span style={{ color: '#ff8c00', fontWeight: 700, marginRight: '6px' }}>{item.idNum}</span>
+                              {item.nominal}
+                            </td>
                             <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{item.length.toFixed(2)}</td>
                             <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{item.count}</td>
                             <td style={{ padding: '6px 4px', textAlign: 'right', color: '#fff', fontWeight: 600 }}>
@@ -1766,7 +1860,11 @@ const getWallMemberDetails = (member: FramingMember, wall: any) => {
   };
 };
 
-const renderWallFramingCutList = (members: FramingMember[], wall: any) => {
+const renderWallFramingCutList = (
+  members: FramingMember[],
+  wall: any,
+  getCutIdentifier: (nominal: string, length: number) => string
+) => {
   const groups: {
     [key: string]: {
       nominal: string;
@@ -1829,9 +1927,18 @@ const renderWallFramingCutList = (members: FramingMember[], wall: any) => {
               placementText = sortedSpans;
             }
 
+            const idNum = getCutIdentifier(g.nominal, g.length);
+
             return (
               <tr key={idx} style={{ borderBottom: '1px solid #2a2a2a' }}>
-                <td style={{ padding: '6px 4px', color: '#ccc' }}>{g.nominal}</td>
+                <td style={{ padding: '6px 4px', color: '#ccc' }}>
+                  {idNum ? (
+                    <>
+                      <span style={{ color: '#ff8c00', fontWeight: 700, marginRight: '6px' }}>{idNum}</span>
+                      {g.nominal}
+                    </>
+                  ) : g.nominal}
+                </td>
                 <td style={{ padding: '6px 4px', color: '#eee', fontWeight: 600 }}>{g.role}</td>
                 <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{g.length.toFixed(2)}</td>
                 <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{g.count}</td>
@@ -1847,7 +1954,10 @@ const renderWallFramingCutList = (members: FramingMember[], wall: any) => {
   );
 };
 
-const renderJoistsCutList = (joists: FramingMember[]) => {
+const renderJoistsCutList = (
+  joists: FramingMember[],
+  getCutIdentifier: (nominal: string, length: number) => string
+) => {
   const groups: {
     [key: string]: {
       nominal: string;
@@ -1891,24 +2001,37 @@ const renderJoistsCutList = (joists: FramingMember[]) => {
           </tr>
         </thead>
         <tbody>
-          {Object.values(groups).map((g, idx) => (
-            <tr key={idx} style={{ borderBottom: '1px solid #2a2a2a' }}>
-              <td style={{ padding: '6px 4px', color: '#ccc' }}>{g.nominal}</td>
-              <td style={{ padding: '6px 4px', color: '#eee', fontWeight: 600 }}>{g.type}</td>
-              <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{g.length.toFixed(2)}</td>
-              <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{g.count}</td>
-              <td style={{ padding: '6px 4px', textAlign: 'right', color: '#fff', fontWeight: 600 }}>
-                {(g.length * g.count).toFixed(2)}
-              </td>
-            </tr>
-          ))}
+          {Object.values(groups).map((g, idx) => {
+            const idNum = getCutIdentifier(g.nominal, g.length);
+            return (
+              <tr key={idx} style={{ borderBottom: '1px solid #2a2a2a' }}>
+                <td style={{ padding: '6px 4px', color: '#ccc' }}>
+                  {idNum ? (
+                    <>
+                      <span style={{ color: '#ff8c00', fontWeight: 700, marginRight: '6px' }}>{idNum}</span>
+                      {g.nominal}
+                    </>
+                  ) : g.nominal}
+                </td>
+                <td style={{ padding: '6px 4px', color: '#eee', fontWeight: 600 }}>{g.type}</td>
+                <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{g.length.toFixed(2)}</td>
+                <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{g.count}</td>
+                <td style={{ padding: '6px 4px', textAlign: 'right', color: '#fff', fontWeight: 600 }}>
+                  {(g.length * g.count).toFixed(2)}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 };
 
-const renderRoofCutList = (roofMembers: FramingMember[]) => {
+const renderRoofCutList = (
+  roofMembers: FramingMember[],
+  getCutIdentifier: (nominal: string, length: number) => string
+) => {
   const groups: {
     [key: string]: {
       nominal: string;
@@ -1955,30 +2078,48 @@ const renderRoofCutList = (roofMembers: FramingMember[]) => {
           </tr>
         </thead>
         <tbody>
-          {Object.values(groups).map((g, idx) => (
-            <tr key={idx} style={{ borderBottom: '1px solid #2a2a2a' }}>
-              <td style={{ padding: '6px 4px', color: '#ccc' }}>{g.nominal}</td>
-              <td style={{ padding: '6px 4px', color: '#eee', fontWeight: 600 }}>{g.type}</td>
-              <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{g.length.toFixed(2)}</td>
-              <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{g.count}</td>
-              <td style={{ padding: '6px 4px', textAlign: 'right', color: '#fff', fontWeight: 600 }}>
-                {(g.length * g.count).toFixed(2)}
-              </td>
-            </tr>
-          ))}
+          {Object.values(groups).map((g, idx) => {
+            const idNum = getCutIdentifier(g.nominal, g.length);
+            return (
+              <tr key={idx} style={{ borderBottom: '1px solid #2a2a2a' }}>
+                <td style={{ padding: '6px 4px', color: '#ccc' }}>
+                  {idNum ? (
+                    <>
+                      <span style={{ color: '#ff8c00', fontWeight: 700, marginRight: '6px' }}>{idNum}</span>
+                      {g.nominal}
+                    </>
+                  ) : g.nominal}
+                </td>
+                <td style={{ padding: '6px 4px', color: '#eee', fontWeight: 600 }}>{g.type}</td>
+                <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{g.length.toFixed(2)}</td>
+                <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{g.count}</td>
+                <td style={{ padding: '6px 4px', textAlign: 'right', color: '#fff', fontWeight: 600 }}>
+                  {(g.length * g.count).toFixed(2)}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 };
 
-const renderScrewsCutList = (screws: FramingMember[]) => {
+const renderScrewsCutList = (
+  screws: FramingMember[],
+  getCutIdentifier: (nominal: string, length: number) => string
+) => {
   if (screws.length === 0) return null;
   const firstScrew = screws[0];
   const diameter = Math.round(firstScrew.size[0] * 1000);
   const length = Math.round(firstScrew.size[1] * 1000);
   const dimensionsStr = `${diameter}mm x ${length}mm`;
-  
+
+  const [w, h, d] = firstScrew.size;
+  const len = Math.max(w, h, d);
+  const nominal = "Steel Ground Screw (76x800mm)";
+  const idNum = getCutIdentifier(nominal, len);
+
   return (
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
@@ -1991,7 +2132,14 @@ const renderScrewsCutList = (screws: FramingMember[]) => {
         </thead>
         <tbody>
           <tr style={{ borderBottom: '1px solid #2a2a2a' }}>
-            <td style={{ padding: '6px 4px', color: '#eee', fontWeight: 600 }}>Steel Ground Screw</td>
+            <td style={{ padding: '6px 4px', color: '#eee', fontWeight: 600 }}>
+              {idNum ? (
+                <>
+                  <span style={{ color: '#ff8c00', fontWeight: 700, marginRight: '6px' }}>{idNum}</span>
+                  Steel Ground Screw
+                </>
+              ) : 'Steel Ground Screw'}
+            </td>
             <td style={{ padding: '6px 4px', color: '#ccc' }}>{dimensionsStr}</td>
             <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb' }}>{screws.length}</td>
           </tr>

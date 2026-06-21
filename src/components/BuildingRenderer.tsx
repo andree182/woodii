@@ -20,6 +20,9 @@ export default function BuildingRenderer() {
   const totalFloors = floors.length;
   const topElevation = totalFloors * heightPerFloor;
 
+  console.log("RENDERING BuildingRenderer. internalWalls:", floors.map(f => f.internalWalls?.map(w => ({ id: w.id, start: w.start, end: w.end, subObjects: w.subObjects.map(o => o.id) }))));
+
+
   // Helper to determine material properties based on selection and see-through mode
   const getMaterialProps = (id: string, _type: 'wall' | 'subObject' | 'roof' | 'floor', defaultColor: string) => {
     const isSelected = uiState.selectedId === id;
@@ -672,6 +675,183 @@ export default function BuildingRenderer() {
           );
         })()}
 
+        {/* Invisible raycast target for the wall body drag */}
+        <mesh
+          position={[length / 2, wallBaseHeight / 2, 0]}
+          onClick={(e) => {
+            e.stopPropagation();
+            selectObject(wallId, 'wall');
+          }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            selectObject(wallId, 'wall');
+            
+            // Calculate initial drag offset in world coordinates projected on floor plane
+            const floorPlane = new Plane(new Vector3(0, 1, 0), -(level * heightPerFloor));
+            const intersection = new Vector3();
+            e.ray.intersectPlane(floorPlane, intersection);
+            
+            const offset: [number, number] = [
+              wall.start[0] - intersection.x,
+              wall.start[1] - intersection.z
+            ];
+            
+            startDragging(wallId, 'internalWall', offset);
+            (e.target as any).setPointerCapture?.(e.pointerId);
+          }}
+          onPointerUp={(e) => {
+            e.stopPropagation();
+            stopDragging();
+            (e.target as any).releasePointerCapture?.(e.pointerId);
+          }}
+          onPointerMove={(e) => {
+            if (uiState.isDragging && uiState.draggedId === wallId && uiState.draggedType === 'internalWall') {
+              e.stopPropagation();
+              const floorPlane = new Plane(new Vector3(0, 1, 0), -(level * heightPerFloor));
+              const intersection = new Vector3();
+              e.ray.intersectPlane(floorPlane, intersection);
+              updateDragPosition([intersection.x, intersection.y, intersection.z]);
+            }
+          }}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = 'move';
+          }}
+          onPointerOut={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = 'auto';
+          }}
+        >
+          <boxGeometry args={[length, wallBaseHeight, wall.timberSize.width + 2 * wall.liningThickness + 0.08]} />
+          <meshBasicMaterial transparent opacity={0.0} depthWrite={false} />
+        </mesh>
+
+        {/* Selected Handles for Move and Rotation */}
+        {isSelected && (
+          <group>
+            {/* Start point handle */}
+            <mesh
+              position={[0, wallBaseHeight / 2, 0]}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                startDragging(wallId, 'internalWallStart');
+                (e.target as any).setPointerCapture?.(e.pointerId);
+              }}
+              onPointerUp={(e) => {
+                e.stopPropagation();
+                stopDragging();
+                (e.target as any).releasePointerCapture?.(e.pointerId);
+              }}
+              onPointerMove={(e) => {
+                if (uiState.isDragging && uiState.draggedId === wallId && uiState.draggedType === 'internalWallStart') {
+                  e.stopPropagation();
+                  const floorPlane = new Plane(new Vector3(0, 1, 0), -(level * heightPerFloor));
+                  const intersection = new Vector3();
+                  e.ray.intersectPlane(floorPlane, intersection);
+                  updateDragPosition([intersection.x, intersection.y, intersection.z]);
+                }
+              }}
+              onPointerOver={(e) => {
+                e.stopPropagation();
+                document.body.style.cursor = 'crosshair';
+              }}
+              onPointerOut={(e) => {
+                e.stopPropagation();
+                document.body.style.cursor = 'auto';
+              }}
+            >
+              <sphereGeometry args={[0.08, 16, 16]} />
+              <meshBasicMaterial color="#3498db" transparent opacity={0.8} depthTest={false} />
+            </mesh>
+
+            {/* End point handle */}
+            <mesh
+              position={[length, wallBaseHeight / 2, 0]}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                startDragging(wallId, 'internalWallEnd');
+                (e.target as any).setPointerCapture?.(e.pointerId);
+              }}
+              onPointerUp={(e) => {
+                e.stopPropagation();
+                stopDragging();
+                (e.target as any).releasePointerCapture?.(e.pointerId);
+              }}
+              onPointerMove={(e) => {
+                if (uiState.isDragging && uiState.draggedId === wallId && uiState.draggedType === 'internalWallEnd') {
+                  e.stopPropagation();
+                  const floorPlane = new Plane(new Vector3(0, 1, 0), -(level * heightPerFloor));
+                  const intersection = new Vector3();
+                  e.ray.intersectPlane(floorPlane, intersection);
+                  updateDragPosition([intersection.x, intersection.y, intersection.z]);
+                }
+              }}
+              onPointerOver={(e) => {
+                e.stopPropagation();
+                document.body.style.cursor = 'crosshair';
+              }}
+              onPointerOut={(e) => {
+                e.stopPropagation();
+                document.body.style.cursor = 'auto';
+              }}
+            >
+              <sphereGeometry args={[0.08, 16, 16]} />
+              <meshBasicMaterial color="#3498db" transparent opacity={0.8} depthTest={false} />
+            </mesh>
+
+            {/* Rotation handle */}
+            <group position={[length / 2, wallBaseHeight, 0]}>
+              {/* Connector line */}
+              <mesh position={[0, 0.15, 0]}>
+                <cylinderGeometry args={[0.01, 0.01, 0.3, 8]} />
+                <meshBasicMaterial color="#2ecc71" depthTest={false} />
+              </mesh>
+              {/* Rotation sphere */}
+              <mesh
+                position={[0, 0.3, 0]}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  const floorPlane = new Plane(new Vector3(0, 1, 0), -(level * heightPerFloor));
+                  const intersection = new Vector3();
+                  e.ray.intersectPlane(floorPlane, intersection);
+                  
+                  const cx = (wall.start[0] + wall.end[0]) / 2;
+                  const cz = (wall.start[1] + wall.end[1]) / 2;
+                  const initialAngle = Math.atan2(intersection.z - cz, intersection.x - cx);
+                  
+                  startDragging(wallId, 'internalWallRotate', [initialAngle, rotationY]);
+                  (e.target as any).setPointerCapture?.(e.pointerId);
+                }}
+                onPointerUp={(e) => {
+                  e.stopPropagation();
+                  stopDragging();
+                  (e.target as any).releasePointerCapture?.(e.pointerId);
+                }}
+                onPointerMove={(e) => {
+                  if (uiState.isDragging && uiState.draggedId === wallId && uiState.draggedType === 'internalWallRotate') {
+                    e.stopPropagation();
+                    const floorPlane = new Plane(new Vector3(0, 1, 0), -(level * heightPerFloor));
+                    const intersection = new Vector3();
+                    e.ray.intersectPlane(floorPlane, intersection);
+                    updateDragPosition([intersection.x, intersection.y, intersection.z]);
+                  }
+                }}
+                onPointerOver={(e) => {
+                  e.stopPropagation();
+                  document.body.style.cursor = 'grab';
+                }}
+                onPointerOut={(e) => {
+                  e.stopPropagation();
+                  document.body.style.cursor = 'auto';
+                }}
+              >
+                <sphereGeometry args={[0.08, 16, 16]} />
+                <meshBasicMaterial color="#2ecc71" transparent opacity={0.8} depthTest={false} />
+              </mesh>
+            </group>
+          </group>
+        )}
+
         {/* Sub-objects nested in internal wall space (Doors) */}
         {wall.subObjects.map((rawObj) => {
           const isDoor = rawObj.type === 'door';
@@ -978,10 +1158,14 @@ export default function BuildingRenderer() {
     return -1;
   };
 
-  // Hide components if single floor view is active and we are on a higher floor
-  const visibleFloors = uiState.currentFloorView === -1
+  // In topDown view, we only want to show the active floor (defaulting to floor 0 if none is selected)
+  const activeFloorLevel = uiState.viewMode === 'topDown'
+    ? (uiState.currentFloorView === -1 ? 0 : uiState.currentFloorView)
+    : uiState.currentFloorView;
+
+  const visibleFloors = activeFloorLevel === -1
     ? floors
-    : floors.filter((f) => f.level === uiState.currentFloorView);
+    : floors.filter((f) => f.level === activeFloorLevel);
 
   return (
     <group>
@@ -995,7 +1179,7 @@ export default function BuildingRenderer() {
       ))}
 
       {/* Ceiling Floor Slab (Attic floor / floor of roof) */}
-      {(uiState.currentFloorView === -1 || uiState.currentFloorView === totalFloors) && (() => {
+      {uiState.viewMode !== 'topDown' && (uiState.currentFloorView === -1 || uiState.currentFloorView === totalFloors) && (() => {
         const matProps = getMaterialProps('floor-roof', 'floor', '#666666');
         const wallThickness = floors[0]?.walls[0]?.thickness || 0.15;
         const outerW = width + wallThickness * 0.70;
@@ -1045,7 +1229,7 @@ export default function BuildingRenderer() {
         );
       })()}
       {/* Roof: only render if we are viewing all floors or the highest floor */}
-      {(uiState.currentFloorView === -1 || uiState.currentFloorView === totalFloors - 1 || uiState.currentFloorView === totalFloors) && renderRoof()}
+      {uiState.viewMode !== 'topDown' && (uiState.currentFloorView === -1 || uiState.currentFloorView === totalFloors - 1 || uiState.currentFloorView === totalFloors) && renderRoof()}
 
       {/* 2x4 Framing & Foundation Layer */}
       {(() => {
@@ -1062,11 +1246,23 @@ export default function BuildingRenderer() {
         return (
           <group>
             {visibleMembers.map((member) => {
-              if (uiState.currentFloorView !== -1) {
-                const memberLevel = getMemberLevel(member.id);
-                const isRoofMember = member.type === 'rafter' || member.type === 'ridge' || member.id.includes('roof-');
-                const isTopFloorView = uiState.currentFloorView === totalFloors - 1 || uiState.currentFloorView === totalFloors;
+              const memberLevel = getMemberLevel(member.id);
+              const isRoofMember = member.type === 'rafter' || member.type === 'ridge' || member.id.includes('roof-');
 
+              // If top-down view, hide roof members
+              if (uiState.viewMode === 'topDown' && isRoofMember) {
+                return null;
+              }
+
+              // In top-down view, we only show the active level (screws only on level 0)
+              if (uiState.viewMode === 'topDown') {
+                if (member.type === 'screw') {
+                  if (activeFloorLevel !== 0) return null;
+                } else {
+                  if (memberLevel !== activeFloorLevel) return null;
+                }
+              } else if (uiState.currentFloorView !== -1) {
+                const isTopFloorView = uiState.currentFloorView === totalFloors - 1 || uiState.currentFloorView === totalFloors;
                 if (memberLevel !== uiState.currentFloorView && !(isRoofMember && isTopFloorView)) {
                   return null;
                 }
@@ -1082,6 +1278,7 @@ export default function BuildingRenderer() {
               const isSelected = uiState.selectedId && (
                 uiState.selectedId === member.id || 
                 (wallMatch && uiState.selectedId === wallMatch[1]) ||
+                (member.wallId && uiState.selectedId === member.wallId) ||
                 (member.id.includes('roof') && !member.id.includes('floor-roof') && uiState.selectedId === 'roof') ||
                 (() => {
                   const memberLevel = getMemberLevel(member.id);
@@ -1100,7 +1297,9 @@ export default function BuildingRenderer() {
 
               const handleClick = (e: any) => {
                 e.stopPropagation();
-                if (wallMatch) {
+                if (member.wallId && member.wallId.startsWith('internal-')) {
+                  selectObject(member.wallId, 'wall');
+                } else if (wallMatch) {
                   selectObject(wallMatch[1], 'wall');
                 } else if (member.id.includes('roof') && !member.id.includes('floor-roof')) {
                   selectObject('roof', 'roof');

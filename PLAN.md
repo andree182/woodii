@@ -37,6 +37,9 @@ We are designing together a web F/three.js/jsx (using vite to build) application
   * The sub-objects can be selected, and moved on the wall by dragging (horizontally, and also vertically for windows/openings) - or their properties can be adjusted (color, dimensions, elevation).
   * Allow 'see through' with shown construction items
   * Allow 'see through' for different floors, and to see behind outer walls
+  * Orthographic Top-Down Camera: Dynamically switches the Canvas camera to Orthographic mode when in Top-Down view, centering on the target active floor elevation.
+  * Active Floor View Selector: Added a stylized button group control in the Floors sidebar section to choose which floor level is actively rendered and modified.
+  * Project Persistence Panel: Repositioned Save/Load/Demos tools to the top of the Design tab, replacing the legacy simple "Building Type" dropdown.
 
 * Advanced Construction Rules & Foundations:
   * Symmetrical and flush alignment of outer floor joists (rim joists) and roof rafters to cover the exact floor/roof dimensions without offset skew.

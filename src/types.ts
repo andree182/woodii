@@ -72,7 +72,9 @@ export interface UIState {
   currentFloorView: number; // Active floor to edit / view (-1 for all)
   isDragging: boolean;
   draggedId: string | null;
-  draggedType: 'subObject' | 'wallHandle' | null;
+  draggedType: 'subObject' | 'wallHandle' | 'internalWall' | 'internalWallStart' | 'internalWallEnd' | 'internalWallRotate' | null;
+  dragOffset?: [number, number] | null;
+  viewMode?: '3D' | 'topDown' | 'walking';
 }
 
 export interface FoundationConfig {

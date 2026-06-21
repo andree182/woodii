@@ -12,7 +12,7 @@ export const createOuterWalls = (width: number, depth: number, thickness = 0.15,
       start: [-halfW - thickness * 0.5, halfD],
       end: [halfW + thickness * 0.5, halfD],
       thickness,
-      subObjects: [
+      subObjects: level === 0 ? [
         {
           id: `door-main-${level}`,
           type: 'door',
@@ -21,7 +21,7 @@ export const createOuterWalls = (width: number, depth: number, thickness = 0.15,
           height: 2.0,
           color: '#8B4513',
         }
-      ],
+      ] : [],
     },
     {
       id: 'wall-right',
@@ -131,7 +131,7 @@ interface ProjectStore extends ProjectState {
   resetProject: () => void;
 
   // Dragging actions
-  startDragging: (id: string, type: 'subObject' | 'wallHandle') => void;
+  startDragging: (id: string, type: UIState['draggedType'], offset?: [number, number] | null) => void;
   stopDragging: () => void;
   updateDragPosition: (point: [number, number, number]) => void;
 }
@@ -727,12 +727,13 @@ export const useProjectStore = create<ProjectStore>((set) => ({
     };
   }),
 
-  startDragging: (id, type) => set((state) => ({
+  startDragging: (id, type, offset = null) => set((state) => ({
     uiState: {
       ...state.uiState,
       isDragging: true,
       draggedId: id,
       draggedType: type,
+      dragOffset: offset,
     }
   })),
 
@@ -742,12 +743,156 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       isDragging: false,
       draggedId: null,
       draggedType: null,
+      dragOffset: null,
     }
   })),
 
   updateDragPosition: (point) => set((state) => {
     const { draggedId, draggedType } = state.uiState;
     if (!draggedId || !draggedType) return {};
+
+    if (draggedType === 'internalWall' || draggedType === 'internalWallStart' || draggedType === 'internalWallEnd' || draggedType === 'internalWallRotate') {
+      let foundFloor: Floor | null = null;
+      let foundWall: InternalWall | null = null;
+      
+      for (const floor of state.floors) {
+        if (floor.internalWalls) {
+          const w = floor.internalWalls.find(item => item.id === draggedId);
+          if (w) {
+            foundFloor = floor;
+            foundWall = w;
+            break;
+          }
+        }
+      }
+      
+      if (!foundFloor || !foundWall) return {};
+
+      const [x, , z] = point;
+      const halfW = state.dimensions.width / 2;
+      const halfD = state.dimensions.depth / 2;
+      const margin = 0.05;
+      const minX = -halfW + margin;
+      const maxX = halfW - margin;
+      const minZ = -halfD + margin;
+      const maxZ = halfD - margin;
+      
+      let finalStartX = foundWall.start[0];
+      let finalStartZ = foundWall.start[1];
+      let finalEndX = foundWall.end[0];
+      let finalEndZ = foundWall.end[1];
+
+      if (draggedType === 'internalWall') {
+        const [offsetStartX, offsetStartZ] = state.uiState.dragOffset || [0, 0];
+        let tx = x + offsetStartX - foundWall.start[0];
+        let tz = z + offsetStartZ - foundWall.start[1];
+
+        // adjust translation to keep both inside bounds
+        if (foundWall.start[0] + tx < minX) tx = minX - foundWall.start[0];
+        if (foundWall.start[0] + tx > maxX) tx = maxX - foundWall.start[0];
+        if (foundWall.end[0] + tx < minX) tx = minX - foundWall.end[0];
+        if (foundWall.end[0] + tx > maxX) tx = maxX - foundWall.end[0];
+
+        if (foundWall.start[1] + tz < minZ) tz = minZ - foundWall.start[1];
+        if (foundWall.start[1] + tz > maxZ) tz = maxZ - foundWall.start[1];
+        if (foundWall.end[1] + tz < minZ) tz = minZ - foundWall.end[1];
+        if (foundWall.end[1] + tz > maxZ) tz = maxZ - foundWall.end[1];
+
+        finalStartX = foundWall.start[0] + tx;
+        finalStartZ = foundWall.start[1] + tz;
+        finalEndX = foundWall.end[0] + tx;
+        finalEndZ = foundWall.end[1] + tz;
+      } else if (draggedType === 'internalWallStart') {
+        const targetStartX = Math.max(minX, Math.min(maxX, x));
+        const targetStartZ = Math.max(minZ, Math.min(maxZ, z));
+        const dx = finalEndX - targetStartX;
+        const dz = finalEndZ - targetStartZ;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist >= 0.1) {
+          finalStartX = targetStartX;
+          finalStartZ = targetStartZ;
+        }
+      } else if (draggedType === 'internalWallEnd') {
+        const targetEndX = Math.max(minX, Math.min(maxX, x));
+        const targetEndZ = Math.max(minZ, Math.min(maxZ, z));
+        const dx = targetEndX - finalStartX;
+        const dz = targetEndZ - finalStartZ;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist >= 0.1) {
+          finalEndX = targetEndX;
+          finalEndZ = targetEndZ;
+        }
+      } else if (draggedType === 'internalWallRotate') {
+        const [initialAngle] = state.uiState.dragOffset || [0, 0];
+        const cx = (foundWall.start[0] + foundWall.end[0]) / 2;
+        const cz = (foundWall.start[1] + foundWall.end[1]) / 2;
+        const currentAngle = Math.atan2(z - cz, x - cx);
+        const angleDelta = currentAngle - initialAngle;
+        
+        const dx = foundWall.end[0] - foundWall.start[0];
+        const dz = foundWall.end[1] - foundWall.start[1];
+        const wallAngle = Math.atan2(dz, dx);
+        const newAngle = wallAngle + angleDelta;
+        const length = Math.sqrt(dx * dx + dz * dz);
+
+        const targetStartX = cx - (length / 2) * Math.cos(newAngle);
+        const targetStartZ = cz - (length / 2) * Math.sin(newAngle);
+        const targetEndX = cx + (length / 2) * Math.cos(newAngle);
+        const targetEndZ = cz + (length / 2) * Math.sin(newAngle);
+
+        const clampX = (val: number) => Math.max(minX, Math.min(maxX, val));
+        const clampZ = (val: number) => Math.max(minZ, Math.min(maxZ, val));
+
+        finalStartX = clampX(targetStartX);
+        finalStartZ = clampZ(targetStartZ);
+        finalEndX = clampX(targetEndX);
+        finalEndZ = clampZ(targetEndZ);
+      }
+
+      // Re-clamp sub-objects
+      const newLength = Math.sqrt(
+        Math.pow(finalEndX - finalStartX, 2) + Math.pow(finalEndZ - finalStartZ, 2)
+      );
+      const wallThickness = foundWall.timberSize.width + foundWall.liningThickness * 2;
+      const adjustedSubObjects = foundWall.subObjects.map(obj => {
+        const halfW = obj.width / 2;
+        const minPos = halfW + wallThickness;
+        const maxPos = newLength - halfW - wallThickness;
+        const clampedPos = maxPos >= minPos
+          ? Math.max(minPos, Math.min(maxPos, obj.position))
+          : newLength / 2;
+        return { ...obj, position: clampedPos };
+      });
+
+      const updatedFloors = state.floors.map(floor => {
+        if (floor.id !== foundFloor!.id) return floor;
+        return {
+          ...floor,
+          internalWalls: (floor.internalWalls || []).map(w => {
+            if (w.id !== foundWall!.id) return w;
+            return {
+              ...w,
+              start: [finalStartX, finalStartZ] as [number, number],
+              end: [finalEndX, finalEndZ] as [number, number],
+              subObjects: adjustedSubObjects
+            };
+          })
+        };
+      });
+
+      // Update rotation offset to the current angle so rotation doesn't lag/accrue errors
+      const newCx = (finalStartX + finalEndX) / 2;
+      const newCz = (finalStartZ + finalEndZ) / 2;
+      const updatedAngle = Math.atan2(z - newCz, x - newCx);
+
+      return { 
+        floors: updatedFloors,
+        uiState: {
+          ...state.uiState,
+          dragOffset: draggedType === 'internalWallRotate' ? [updatedAngle, 0] : state.uiState.dragOffset
+        }
+      };
+    }
 
     if (draggedType === 'subObject') {
       let foundFloor: Floor | null = null;

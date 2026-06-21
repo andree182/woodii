@@ -102,6 +102,12 @@ interface RoofConfig {
 - Render internal wall frames and cladding layers using butt-joints against outer wall inner faces, supporting standard solid/see-through display modes.
 - Implement Sidebar interface to add, remove, and configure internal wall partitions.
 
+**Phase 13: Internal Wall Drag and Drop + Rotation**
+- Add support for `'internalWall'`, `'internalWallStart'`, `'internalWallEnd'`, and `'internalWallRotate'` drag states to `uiState.draggedType`.
+- Implement full 3D interactive handles for selected internal walls (start/end spheres and a green rotation handle) along with an invisible raycast collision box for translating the wall itself.
+- Update `updateDragPosition` in the store to translate the entire wall (offset-locked to pointer position), extend/shorten from either end, and rotate the wall coordinates around its center, automatically clamping sub-objects and preventing out-of-footprint coordinates.
+
+
 
 ## 6. Development Workflow Rules
 - **Verify before advancing:** Each phase must have a working, visible output before moving to the next.
