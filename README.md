@@ -1,6 +1,8 @@
-# Woodii 3D Designer 🪵
+# Woodii 3D House Designer
 
-**Woodii** is a premium, web-based 3D workspace and construction plan compiler designed for timber frame projects (such as garden houses, playhouses, tiny houses, and partition wall structures). 
+**Woodii** is a web-based 3D workspace and construction plan compiler designed for timber frame projects (such as garden houses, playhouses, tiny houses, and partition wall structures). 
+
+See it in action at https://andree182.github.io/woodii/
 
 The app allows users to visually design buildings in a 3D interface, dynamically recalculate framing structures (studs, plates, joists, and rafters) according to building science rules, and instantly compile print-ready construction workbooks containing wall-by-wall schedules, cut lists, 2D vector plans, and a consolidated Bill of Materials (BOM).
 
