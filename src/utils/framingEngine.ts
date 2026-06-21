@@ -331,7 +331,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
           type: 'plate',
           position: toWorld((x1 + x2) / 2, avgY - lumberThickness / 2, wallLz),
           rotation: [0, rotationY, slopeAngle],
-          size: [plate1Len, lumberThickness, middle],
+          size: [plate2Len, lumberThickness, middle],
           floorId: floor.id,
           wallId: wall.id,
         });
@@ -340,7 +340,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
           type: 'plate',
           position: toWorld((x1 + x2) / 2, avgY - lumberThickness * 1.5, wallLz),
           rotation: [0, rotationY, slopeAngle],
-          size: [plate2Len, lumberThickness, middle],
+          size: [plate1Len, lumberThickness, middle],
           floorId: floor.id,
           wallId: wall.id,
         });

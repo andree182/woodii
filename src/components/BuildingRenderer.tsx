@@ -556,7 +556,6 @@ export default function BuildingRenderer() {
               <OpeningDragGuides
                 obj={obj}
                 length={length}
-                wallThickness={wall.thickness}
                 isDragging={uiState.isDragging && uiState.draggedId === objId}
                 showDimensions={useProjectStore.getState().structuralConfig?.showDimensionsOnDrag !== false}
               />
@@ -1021,7 +1020,6 @@ export default function BuildingRenderer() {
               <OpeningDragGuides
                 obj={obj}
                 length={length}
-                wallThickness={wallThickness}
                 isDragging={uiState.isDragging && uiState.draggedId === objId}
                 showDimensions={useProjectStore.getState().structuralConfig?.showDimensionsOnDrag !== false}
               />
@@ -1395,7 +1393,7 @@ export default function BuildingRenderer() {
                 const tanTheta = Math.tan(theta);
                 
                 const isLeftRafter = member.id.includes('left');
-                const sign = isLeftRafter ? -1 : 1;
+                const sign = isLeftRafter ? 1 : -1;
                 
                 const rafterShape = new Shape();
                 const halfL = rafterLength / 2;
@@ -1464,13 +1462,11 @@ const labelStyle = {
 function OpeningDragGuides({
   obj,
   length,
-  wallThickness,
   isDragging,
   showDimensions
 }: {
   obj: any;
   length: number;
-  wallThickness: number;
   isDragging: boolean;
   showDimensions: boolean;
 }) {

@@ -1529,10 +1529,8 @@ export const useProjectStore = create<ProjectStore>()(
       wallLayers: project.wallLayers || state.wallLayers,
       wallPreset: project.wallPreset || state.wallPreset,
       structuralConfig: {
-        wallBlocking: false,
-        floorBlocking: false,
         showDimensionsOnDrag: true,
-        ...(state.structuralConfig || {}),
+        ...state.structuralConfig,
         ...(project.structuralConfig || {})
       },
       floors: project.floors,

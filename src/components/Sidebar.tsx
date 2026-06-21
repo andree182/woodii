@@ -1607,63 +1607,43 @@ export default function Sidebar() {
             )}
           </section>
 
-          {/* Roof Config (Always Visible inside Selection Editor Tab) */}
-          <section style={{
-            backgroundColor: '#1e1e1e',
-            padding: '16px',
-            borderRadius: '8px',
-            border: '1px solid #333'
-          }}>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>Roof Config</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Roof Type</label>
-                <select
-                  value={roof.type || 'saddle'}
-                  onChange={(e) => handleRoofChange('type', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    backgroundColor: '#1a1a1a',
-                    border: '1px solid #444',
-                    borderRadius: '6px',
-                    color: '#e0e0e0',
-                    fontSize: '12px'
-                  }}
-                >
-                  <option value="saddle">Saddle Roof</option>
-                  <option value="flat">Flat Roof</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Inclination (°)</label>
-                <input
-                  type="number"
-                  min="5"
-                  max="60"
-                  value={roof.inclination}
-                  onChange={(e) => handleRoofChange('inclination', parseInt(e.target.value) || 0)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    backgroundColor: '#1a1a1a',
-                    border: '1px solid #444',
-                    borderRadius: '6px',
-                    color: '#e0e0e0',
-                    fontSize: '12px'
-                  }}
-                />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          {/* Roof Config (Visible inside Selection Editor Tab only if roof is selected) */}
+          {selectedType === 'roof' && (
+            <section style={{
+              backgroundColor: '#1e1e1e',
+              padding: '16px',
+              borderRadius: '8px',
+              border: '1px solid #333'
+            }}>
+              <h3 style={{ margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>Roof Config</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Overhang (m)</label>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Roof Type</label>
+                  <select
+                    value={roof.type || 'saddle'}
+                    onChange={(e) => handleRoofChange('type', e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      backgroundColor: '#1a1a1a',
+                      border: '1px solid #444',
+                      borderRadius: '6px',
+                      color: '#e0e0e0',
+                      fontSize: '12px'
+                    }}
+                  >
+                    <option value="saddle">Saddle Roof</option>
+                    <option value="flat">Flat Roof</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Inclination (°)</label>
                   <input
                     type="number"
-                    step="0.05"
-                    min="0"
-                    max="1.5"
-                    value={roof.overhang}
-                    onChange={(e) => handleRoofChange('overhang', parseFloat(e.target.value) || 0)}
+                    min="5"
+                    max="60"
+                    value={roof.inclination}
+                    onChange={(e) => handleRoofChange('inclination', parseInt(e.target.value) || 0)}
                     style={{
                       width: '100%',
                       padding: '8px',
@@ -1675,29 +1655,51 @@ export default function Sidebar() {
                     }}
                   />
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Thickness (m)</label>
-                  <input
-                    type="number"
-                    step="0.05"
-                    min="0.05"
-                    max="0.5"
-                    value={roof.thickness}
-                    onChange={(e) => handleRoofChange('thickness', parseFloat(e.target.value) || 0)}
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      backgroundColor: '#1a1a1a',
-                      border: '1px solid #444',
-                      borderRadius: '6px',
-                      color: '#e0e0e0',
-                      fontSize: '12px'
-                    }}
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Overhang (m)</label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      min="0"
+                      max="1.0"
+                      value={roof.overhang}
+                      onChange={(e) => handleRoofChange('overhang', parseFloat(e.target.value) || 0)}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        backgroundColor: '#1a1a1a',
+                        border: '1px solid #444',
+                        borderRadius: '6px',
+                        color: '#e0e0e0',
+                        fontSize: '12px'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Thickness (m)</label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      min="0.05"
+                      max="0.5"
+                      value={roof.thickness}
+                      onChange={(e) => handleRoofChange('thickness', parseFloat(e.target.value) || 0)}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        backgroundColor: '#1a1a1a',
+                        border: '1px solid #444',
+                        borderRadius: '6px',
+                        color: '#e0e0e0',
+                        fontSize: '12px'
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          </section>
+            </section>
+          )}
 
           {/* Global Reset */}
           <button
