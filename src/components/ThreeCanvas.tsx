@@ -114,6 +114,17 @@ export default function ThreeCanvas() {
 
   const { width, depth, heightPerFloor } = dimensions;
 
+  // Release pointer lock when switching away from walking mode
+  useEffect(() => {
+    if (viewMode !== 'walking' && document.pointerLockElement) {
+      try {
+        document.exitPointerLock();
+      } catch (err) {
+        console.error("Failed to exit pointer lock:", err);
+      }
+    }
+  }, [viewMode]);
+
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', background: '#1a1a1a' }}>
       <Canvas

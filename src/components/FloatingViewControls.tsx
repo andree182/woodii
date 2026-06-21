@@ -41,7 +41,10 @@ export default function FloatingViewControls() {
           ] as const).map((mode) => (
             <button
               key={mode.id}
-              onClick={() => updateUIState({ viewMode: mode.id })}
+              onClick={(e) => {
+                e.stopPropagation();
+                updateUIState({ viewMode: mode.id });
+              }}
               style={{
                 flex: 1,
                 padding: '6px 2px',
@@ -72,7 +75,10 @@ export default function FloatingViewControls() {
           ] as const).map((mode) => (
             <button
               key={mode.id}
-              onClick={() => updateUIState({ seeThroughMode: mode.id })}
+              onClick={(e) => {
+                e.stopPropagation();
+                updateUIState({ seeThroughMode: mode.id });
+              }}
               style={{
                 flex: 1,
                 padding: '6px 2px',
@@ -97,7 +103,10 @@ export default function FloatingViewControls() {
         <label style={{ fontSize: '9px', color: '#888', textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Active Floor View</label>
         <div style={{ display: 'flex', gap: '3px', backgroundColor: '#111', padding: '3px', borderRadius: '6px', flexWrap: 'wrap' }}>
           <button
-            onClick={() => updateUIState({ currentFloorView: -1 })}
+            onClick={(e) => {
+              e.stopPropagation();
+              updateUIState({ currentFloorView: -1 });
+            }}
             style={{
               flex: '1 1 auto',
               padding: '6px 4px',
@@ -116,7 +125,10 @@ export default function FloatingViewControls() {
           {floors.map((floor) => (
             <button
               key={floor.id}
-              onClick={() => updateUIState({ currentFloorView: floor.level })}
+              onClick={(e) => {
+                e.stopPropagation();
+                updateUIState({ currentFloorView: floor.level });
+              }}
               style={{
                 flex: '1 1 auto',
                 padding: '6px 4px',

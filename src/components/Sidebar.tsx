@@ -1567,6 +1567,85 @@ export default function Sidebar() {
                                         <strong>Openings:</strong> {wall.subObjects.map((obj: any) => `${obj.type.toUpperCase()} (W: ${obj.width.toFixed(2)}m, H: ${obj.height.toFixed(2)}m, Pos: ${obj.position.toFixed(2)}m)`).join(', ')}
                                       </div>
                                     )}
+                                    {wallMembers.length > 0 && (
+                                      <WallDrawing wall={wall} wallMembers={wallMembers} heightPerFloor={dimensions.heightPerFloor} getCutIdentifier={getCutIdentifier} />
+                                    )}
+                                    {wallMembers.length === 0 ? (
+                                      <p style={{ fontSize: '11px', color: '#666', fontStyle: 'italic', margin: 0 }}>No framing generated for this wall.</p>
+                                    ) : (
+                                      renderWallFramingCutList(wallMembers, wall, getCutIdentifier)
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+
+                          {/* Partition Wall Framing */}
+                          {(floor.internalWalls || []).map((wall, idx) => {
+                            const wallKey = wall.id;
+                            const wallMembers = framing.filter(m => m.floorId === floor.id && m.wallId === wall.id);
+                            
+                            const dx = wall.end[0] - wall.start[0];
+                            const dz = wall.end[1] - wall.start[1];
+                            const wallLength = Math.sqrt(dx * dx + dz * dz);
+                            
+                            const wallTitle = `Partition Wall ${idx + 1}`;
+                            const isWallSelected = selectedType === 'wall' && selectedId === wallKey;
+                            const isExpanded = expandedWalls[wallKey] || isWallSelected;
+
+                            return (
+                              <div
+                                key={wall.id}
+                                style={{
+                                  backgroundColor: isWallSelected ? '#26211a' : '#1e1e1e',
+                                  borderRadius: '6px',
+                                  border: isWallSelected ? '1px solid #ff8c00' : '1px solid #333',
+                                  boxShadow: isWallSelected ? '0 0 8px rgba(255, 140, 0, 0.2)' : 'none',
+                                  overflow: 'hidden',
+                                  marginTop: '6px'
+                                }}
+                              >
+                                <div
+                                  onClick={() => {
+                                    if (isWallSelected) {
+                                      selectObject(null, null);
+                                      setExpandedWalls(prev => ({ ...prev, [wallKey]: false }));
+                                    } else {
+                                      selectObject(wallKey, 'wall');
+                                      setExpandedWalls(prev => ({ ...prev, [wallKey]: true }));
+                                    }
+                                  }}
+                                  style={{
+                                    padding: '10px 12px',
+                                    backgroundColor: isWallSelected ? '#3a2d1d' : '#2a2a2a',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  <div>
+                                    <strong style={{ fontSize: '11px', color: isWallSelected ? '#ff8c00' : '#eee' }}>{wallTitle}</strong>
+                                    <span style={{ fontSize: '10px', color: '#888', marginLeft: '8px' }}>
+                                      ({wallLength.toFixed(2)}m, {wallMembers.length} pcs)
+                                    </span>
+                                  </div>
+                                  <span style={{ fontSize: '10px', color: '#ff8c00' }}>
+                                    {isExpanded ? '▲ Collapse' : '▼ Expand'}
+                                  </span>
+                                </div>
+
+                                {isExpanded && (
+                                  <div style={{ padding: '10px', backgroundColor: '#151515', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {wall.subObjects.length > 0 && (
+                                      <div style={{ fontSize: '10px', color: '#aaa', backgroundColor: '#222', padding: '6px 8px', borderRadius: '4px', borderLeft: '3px solid #ff8c00' }}>
+                                        <strong>Openings:</strong> {wall.subObjects.map((obj: any) => `${obj.type.toUpperCase()} (W: ${obj.width.toFixed(2)}m, H: ${obj.height.toFixed(2)}m, Pos: ${obj.position.toFixed(2)}m)`).join(', ')}
+                                      </div>
+                                    )}
+                                    {wallMembers.length > 0 && (
+                                      <WallDrawing wall={wall} wallMembers={wallMembers} heightPerFloor={dimensions.heightPerFloor} getCutIdentifier={getCutIdentifier} />
+                                    )}
                                     {wallMembers.length === 0 ? (
                                       <p style={{ fontSize: '11px', color: '#666', fontStyle: 'italic', margin: 0 }}>No framing generated for this wall.</p>
                                     ) : (
@@ -1739,6 +1818,233 @@ const getWallMemberDetails = (member: FramingMember, wall: any) => {
     isVertical,
   };
 };
+
+function WallDrawing({ wall, wallMembers, heightPerFloor, getCutIdentifier }: {
+  wall: any;
+  wallMembers: FramingMember[];
+  heightPerFloor: number;
+  getCutIdentifier: (nominal: string, length: number) => string;
+}) {
+  const dx = wall.end[0] - wall.start[0];
+  const dz = wall.end[1] - wall.start[1];
+  const wallLength = Math.sqrt(dx * dx + dz * dz);
+
+  const floorPart = wallMembers[0]?.floorId?.split('-')?.[1];
+  const floorLevel = floorPart ? parseInt(floorPart) : 0;
+
+  // We add some margins around the drawing for dimension lines
+  const margin = 0.35;
+  const svgWidth = wallLength + margin * 2;
+  const svgHeight = heightPerFloor + margin * 2;
+
+  return (
+    <div style={{
+      marginTop: '10px',
+      marginBottom: '10px',
+      backgroundColor: '#111',
+      border: '1px solid #333',
+      borderRadius: '6px',
+      padding: '8px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '6px'
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: '10px', color: '#ff8c00', fontWeight: 600, textTransform: 'uppercase' }}>Wall Framing Plan Drawing</span>
+        <span style={{ fontSize: '9px', color: '#666' }}>Scale Auto</span>
+      </div>
+
+      <svg
+        width="100%"
+        viewBox={`${-margin} ${-margin} ${svgWidth} ${svgHeight}`}
+        style={{
+          backgroundColor: '#151515',
+          borderRadius: '4px',
+          border: '1px solid #222',
+          display: 'block'
+        }}
+      >
+        {/* Grid Background */}
+        <defs>
+          <pattern id={`drawing-grid-${wall.id}`} width="0.2" height="0.2" patternUnits="userSpaceOnUse">
+            <path d="M 0.2 0 L 0 0 0 0.2" fill="none" stroke="#222" strokeWidth="0.005" />
+          </pattern>
+        </defs>
+        <rect x={-margin} y={-margin} width={svgWidth} height={svgHeight} fill={`url(#drawing-grid-${wall.id})`} />
+
+        {/* Wall Frame Outline */}
+        <rect x={0} y={0} width={wallLength} height={heightPerFloor} fill="rgba(255,255,255,0.02)" stroke="#333" strokeWidth="0.01" />
+
+        {/* Render Openings */}
+        {(wall.subObjects || []).map((obj: any) => {
+          const w = obj.width;
+          const h = obj.height;
+          const x = obj.position - w / 2;
+          const y = heightPerFloor - (obj.elevation !== undefined ? obj.elevation : (obj.type === 'window' ? 0.9 : 0)) - h;
+          return (
+            <g key={obj.id}>
+              <rect
+                x={x}
+                y={y}
+                width={w}
+                height={h}
+                fill="rgba(255, 140, 0, 0.04)"
+                stroke="rgba(255, 140, 0, 0.25)"
+                strokeWidth="0.012"
+                strokeDasharray="0.04, 0.02"
+              />
+              <text
+                x={obj.position}
+                y={y + h / 2}
+                fontSize="0.09"
+                fill="rgba(255, 140, 0, 0.6)"
+                fontWeight="bold"
+                textAnchor="middle"
+                alignmentBaseline="middle"
+                style={{ pointerEvents: 'none', userSelect: 'none', fontFamily: 'sans-serif' }}
+              >
+                {obj.type.toUpperCase()}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Render Framing Members */}
+        {wallMembers.map((m) => {
+          const details = getWallMemberDetails(m, wall);
+          const [, py] = m.position;
+          const localY = py - floorLevel * heightPerFloor;
+          
+          let x = 0;
+          let y = 0;
+          let w = 0;
+          let h = 0;
+
+          const isVertical = details.isVertical;
+          const [mW, mH, mD] = m.size;
+
+          if (isVertical) {
+            // vertical stud
+            const thickness = Math.min(mW, mD);
+            w = thickness;
+            h = details.len;
+            x = details.localX - w / 2;
+            y = heightPerFloor - localY - h / 2;
+          } else {
+            // horizontal plate/blocking/header
+            w = details.len;
+            h = mH; // vertical thickness
+            x = details.localX - w / 2;
+            y = heightPerFloor - localY - h / 2;
+          }
+
+          // Fetch cut identifier (#1, #2, etc.)
+          const idNum = getCutIdentifier(details.nominal, details.len);
+
+          // Stylize based on role
+          let fillColor = '#d2b48c'; // default tan wood
+          let strokeColor = '#b58c54';
+          if (details.role.includes('Plate')) {
+            fillColor = '#b58c54'; // darker wood for plates
+            strokeColor = '#94703d';
+          } else if (details.role.includes('Corner')) {
+            fillColor = '#c5a072';
+            strokeColor = '#a38053';
+          } else if (details.role.includes('Header') || details.role.includes('Sill')) {
+            fillColor = '#a28860';
+            strokeColor = '#7f6640';
+          } else if (details.role.includes('Blocking') || m.id.includes('blocking') || m.id.includes('nogging')) {
+            fillColor = '#caa376';
+            strokeColor = '#a88359';
+          }
+
+          return (
+            <g key={m.id}>
+              <rect
+                x={x}
+                y={y}
+                width={w}
+                height={h}
+                fill={fillColor}
+                stroke={strokeColor}
+                strokeWidth="0.008"
+                rx={0.005}
+                ry={0.005}
+              />
+              {idNum && (
+                <text
+                  x={x + w / 2}
+                  y={y + h / 2}
+                  fontSize={isVertical ? "0.08" : "0.07"}
+                  fill="#ff8c00"
+                  fontWeight="900"
+                  textAnchor="middle"
+                  alignmentBaseline="middle"
+                  paintOrder="stroke fill"
+                  stroke="#151515"
+                  strokeWidth="0.015"
+                  style={{
+                    fontFamily: 'monospace',
+                    pointerEvents: 'none',
+                    userSelect: 'none'
+                  }}
+                  transform={isVertical && h > 0.4 ? `rotate(-90, ${x + w / 2}, ${y + h / 2})` : undefined}
+                >
+                  {idNum}
+                </text>
+              )}
+            </g>
+          );
+        })}
+
+        {/* Dimension Lines - Horizontal (Bottom) */}
+        <g>
+          {/* Main Line */}
+          <line x1={0} y1={heightPerFloor + 0.18} x2={wallLength} y2={heightPerFloor + 0.18} stroke="#888" strokeWidth="0.005" />
+          {/* Ticks */}
+          <line x1={0} y1={heightPerFloor + 0.12} x2={0} y2={heightPerFloor + 0.24} stroke="#888" strokeWidth="0.005" />
+          <line x1={wallLength} y1={heightPerFloor + 0.12} x2={wallLength} y2={heightPerFloor + 0.24} stroke="#888" strokeWidth="0.005" />
+          {/* Text */}
+          <rect x={wallLength / 2 - 0.25} y={heightPerFloor + 0.1} width={0.5} height={0.16} fill="#151515" />
+          <text
+            x={wallLength / 2}
+            y={heightPerFloor + 0.21}
+            fontSize="0.09"
+            fill="#aaa"
+            fontWeight="600"
+            textAnchor="middle"
+            style={{ fontFamily: 'sans-serif' }}
+          >
+            {wallLength.toFixed(2)}m
+          </text>
+        </g>
+
+        {/* Dimension Lines - Vertical (Left) */}
+        <g>
+          {/* Main Line */}
+          <line x1={-0.18} y1={0} x2={-0.18} y2={heightPerFloor} stroke="#888" strokeWidth="0.005" />
+          {/* Ticks */}
+          <line x1={-0.24} y1={0} x2={-0.12} y2={0} stroke="#888" strokeWidth="0.005" />
+          <line x1={-0.24} y1={heightPerFloor} x2={-0.12} y2={heightPerFloor} stroke="#888" strokeWidth="0.005" />
+          {/* Text */}
+          <rect x={-0.28} y={heightPerFloor / 2 - 0.25} width={0.2} height={0.5} fill="#151515" />
+          <text
+            x={-0.2}
+            y={heightPerFloor / 2}
+            fontSize="0.09"
+            fill="#aaa"
+            fontWeight="600"
+            textAnchor="middle"
+            transform={`rotate(-90, -0.2, ${heightPerFloor / 2})`}
+            style={{ fontFamily: 'sans-serif' }}
+          >
+            {heightPerFloor.toFixed(2)}m
+          </text>
+        </g>
+      </svg>
+    </div>
+  );
+}
 
 const renderWallFramingCutList = (
   members: FramingMember[],
