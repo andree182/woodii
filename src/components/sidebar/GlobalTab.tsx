@@ -8,12 +8,14 @@ export default function GlobalTab() {
     wallPreset,
     structuralConfig,
     floors,
+    wallCovers,
 
     setDimensions,
     setFoundationConfig,
     setWallLayers,
     setWallPreset,
     setStructuralConfig,
+    setWallCoversConfig,
     addFloor,
     removeLastFloor,
     resetProject,
@@ -227,6 +229,192 @@ export default function GlobalTab() {
               Total wall thickness: <strong>{(wallLayers.outer + wallLayers.middle + wallLayers.inner).toFixed(3)}m</strong>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Wall Sheathing & Covers Config */}
+      <section>
+        <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>Wall Cladding & Lining</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          
+          {/* External Cladding */}
+          <div style={{ backgroundColor: '#1a1a1a', padding: '12px', borderRadius: '6px', border: '1px solid #333' }}>
+            <h4 style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#ff8c00', textTransform: 'uppercase', fontWeight: 600 }}>External Cladding</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Material Type</label>
+                <select
+                  value={wallCovers.external.material || 'rhombus'}
+                  onChange={(e) => {
+                    const material = e.target.value as any;
+                    if (material === 'rhombus') {
+                      setWallCoversConfig('external', { material, width: 0.09, length: 4.0, thickness: 0.02, gap: 0.01 });
+                    } else if (material === 'decking') {
+                      setWallCoversConfig('external', { material, width: 0.12, length: 4.0, thickness: 0.02, gap: 0.002 });
+                    } else if (material === 'osb_1250') {
+                      setWallCoversConfig('external', { material, width: 1.25, length: 2.50, thickness: 0.012, gap: 0 });
+                    } else if (material === 'osb_625') {
+                      setWallCoversConfig('external', { material, width: 0.625, length: 2.50, thickness: 0.012, gap: 0 });
+                    } else {
+                      setWallCoversConfig('external', { material, width: 0, length: 0, thickness: 0, gap: 0 });
+                    }
+                  }}
+                  style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                >
+                  <option value="rhombus">Rhombus Wood Battens</option>
+                  <option value="decking">Classic Wooden Decking</option>
+                  <option value="osb_1250">OSB Board (2500x1250mm)</option>
+                  <option value="osb_625">OSB Board (2500x625mm)</option>
+                  <option value="none">None (No external cladding)</option>
+                </select>
+              </div>
+
+              {wallCovers.external.material !== 'none' && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '9px', color: '#888', marginBottom: '2px' }}>Width (m)</label>
+                      <input
+                        type="number"
+                        step="0.005"
+                        min="0.01"
+                        value={wallCovers.external.width}
+                        onChange={(e) => setWallCoversConfig('external', { width: parseFloat(e.target.value) || 0.01 })}
+                        style={{ width: '100%', padding: '5px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#fff', fontSize: '11px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '9px', color: '#888', marginBottom: '2px' }}>Length / Board (m)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0.5"
+                        value={wallCovers.external.length}
+                        onChange={(e) => setWallCoversConfig('external', { length: parseFloat(e.target.value) || 0.5 })}
+                        style={{ width: '100%', padding: '5px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#fff', fontSize: '11px' }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '9px', color: '#888', marginBottom: '2px' }}>Thickness (m)</label>
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0.002"
+                        value={wallCovers.external.thickness}
+                        onChange={(e) => setWallCoversConfig('external', { thickness: parseFloat(e.target.value) || 0.002 })}
+                        style={{ width: '100%', padding: '5px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#fff', fontSize: '11px' }}
+                      />
+                    </div>
+                    {(wallCovers.external.material === 'rhombus' || wallCovers.external.material === 'decking') && (
+                      <div>
+                        <label style={{ display: 'block', fontSize: '9px', color: '#888', marginBottom: '2px' }}>Joint Gap (m)</label>
+                        <input
+                          type="number"
+                          step="0.001"
+                          min="0"
+                          value={wallCovers.external.gap || 0}
+                          onChange={(e) => setWallCoversConfig('external', { gap: parseFloat(e.target.value) || 0 })}
+                          style={{ width: '100%', padding: '5px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#fff', fontSize: '11px' }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Internal Lining */}
+          <div style={{ backgroundColor: '#1a1a1a', padding: '12px', borderRadius: '6px', border: '1px solid #333' }}>
+            <h4 style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#ff8c00', textTransform: 'uppercase', fontWeight: 600 }}>Internal Lining</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Material Type</label>
+                <select
+                  value={wallCovers.internal.material || 'osb_1250'}
+                  onChange={(e) => {
+                    const material = e.target.value as any;
+                    if (material === 'decking') {
+                      setWallCoversConfig('internal', { material, width: 0.09, length: 4.0, thickness: 0.015, gap: 0 });
+                    } else if (material === 'osb_1250') {
+                      setWallCoversConfig('internal', { material, width: 1.25, length: 2.50, thickness: 0.012, gap: 0 });
+                    } else if (material === 'osb_625') {
+                      setWallCoversConfig('internal', { material, width: 0.625, length: 2.50, thickness: 0.012, gap: 0 });
+                    } else if (material === 'plasterboard') {
+                      setWallCoversConfig('internal', { material, width: 1.20, length: 2.0, thickness: 0.0125, gap: 0 });
+                    } else {
+                      setWallCoversConfig('internal', { material, width: 0, length: 0, thickness: 0, gap: 0 });
+                    }
+                  }}
+                  style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                >
+                  <option value="osb_1250">OSB Board (2500x1250mm)</option>
+                  <option value="osb_625">OSB Board (2500x625mm)</option>
+                  <option value="plasterboard">Plasterboard (2000x1200mm)</option>
+                  <option value="decking">Wooden Decking (cladding)</option>
+                  <option value="none">None (Open studs)</option>
+                </select>
+              </div>
+
+              {wallCovers.internal.material !== 'none' && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '9px', color: '#888', marginBottom: '2px' }}>Width (m)</label>
+                      <input
+                        type="number"
+                        step="0.005"
+                        min="0.01"
+                        value={wallCovers.internal.width}
+                        onChange={(e) => setWallCoversConfig('internal', { width: parseFloat(e.target.value) || 0.01 })}
+                        style={{ width: '100%', padding: '5px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#fff', fontSize: '11px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '9px', color: '#888', marginBottom: '2px' }}>Length / Board (m)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0.5"
+                        value={wallCovers.internal.length}
+                        onChange={(e) => setWallCoversConfig('internal', { length: parseFloat(e.target.value) || 0.5 })}
+                        style={{ width: '100%', padding: '5px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#fff', fontSize: '11px' }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '9px', color: '#888', marginBottom: '2px' }}>Thickness (m)</label>
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0.002"
+                        value={wallCovers.internal.thickness}
+                        onChange={(e) => setWallCoversConfig('internal', { thickness: parseFloat(e.target.value) || 0.002 })}
+                        style={{ width: '100%', padding: '5px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#fff', fontSize: '11px' }}
+                      />
+                    </div>
+                    {wallCovers.internal.material === 'decking' && (
+                      <div>
+                        <label style={{ display: 'block', fontSize: '9px', color: '#888', marginBottom: '2px' }}>Joint Gap (m)</label>
+                        <input
+                          type="number"
+                          step="0.001"
+                          min="0"
+                          value={wallCovers.internal.gap || 0}
+                          onChange={(e) => setWallCoversConfig('internal', { gap: parseFloat(e.target.value) || 0 })}
+                          style={{ width: '100%', padding: '5px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#fff', fontSize: '11px' }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+          
         </div>
       </section>
 

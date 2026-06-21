@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ProjectState, BuildingType, Dimensions, RoofConfig, FoundationConfig, WallLayersConfig, StructuralConfig, UIState, Floor, Wall, InternalWall, SubObject } from './types';
+import { ProjectState, BuildingType, Dimensions, RoofConfig, FoundationConfig, WallLayersConfig, StructuralConfig, UIState, Floor, Wall, InternalWall, SubObject, TopCoverConfig, SideCoverConfig } from './types';
+
 
 // Helper to create default walls based on dimensions
 export const createOuterWalls = (width: number, depth: number, thickness = 0.15, level = 0): Wall[] => {
@@ -128,6 +129,8 @@ interface ProjectStore extends ProjectState {
   removeInternalWall: (floorId: string, wallId: string) => void;
   updateInternalWall: (floorId: string, wallId: string, updates: Partial<InternalWall>) => void;
   setStructuralConfig: (config: Partial<StructuralConfig>) => void;
+  setTopCoverConfig: (config: Partial<TopCoverConfig>) => void;
+  setWallCoversConfig: (side: 'external' | 'internal', config: Partial<SideCoverConfig>) => void;
   loadProject: (project: any) => void;
   resetProject: () => void;
 
@@ -164,6 +167,30 @@ const INITIAL_PROJECT_STATE = {
     wallBlocking: false,
     floorBlocking: false,
     showDimensionsOnDrag: true,
+  },
+  topCover: {
+    material: 'shingles' as const,
+    width: 1.0,
+    height: 0.33,
+    visibleWidth: 1.0,
+    visibleHeight: 0.145,
+    sheetingMaterial: 'osb_1250' as const,
+    sheetingThickness: 0.015,
+  },
+  wallCovers: {
+    external: {
+      material: 'rhombus' as const,
+      width: 0.09,
+      length: 4.0,
+      thickness: 0.02,
+      gap: 0.01,
+    },
+    internal: {
+      material: 'osb_1250' as const,
+      width: 1.25,
+      length: 2.50,
+      thickness: 0.012,
+    },
   },
   uiState: {
     selectedId: null,
@@ -348,6 +375,17 @@ export const useProjectStore = create<ProjectStore>()(
 
   setFoundationConfig: (config) => set((state) => ({
     foundation: { ...state.foundation, ...config }
+  })),
+
+  setTopCoverConfig: (config) => set((state) => ({
+    topCover: { ...state.topCover, ...config }
+  })),
+
+  setWallCoversConfig: (side, config) => set((state) => ({
+    wallCovers: {
+      ...state.wallCovers,
+      [side]: { ...state.wallCovers[side], ...config }
+    }
   })),
 
   updateUIState: (uiUpdates) => set((state) => ({

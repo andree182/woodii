@@ -94,6 +94,29 @@ export interface StructuralConfig {
   showDimensionsOnDrag?: boolean;
 }
 
+export interface TopCoverConfig {
+  material: 'shingles' | 'tiles' | 'plates';
+  width: number;
+  height: number;
+  visibleWidth: number;
+  visibleHeight: number;
+  sheetingMaterial: 'osb_1250' | 'osb_625' | 'plywood' | 'none';
+  sheetingThickness: number;
+}
+
+export interface SideCoverConfig {
+  material: 'rhombus' | 'decking' | 'osb_1250' | 'osb_625' | 'plasterboard' | 'none';
+  width: number;
+  length: number;
+  thickness: number;
+  gap?: number;
+}
+
+export interface WallCoversConfig {
+  external: SideCoverConfig;
+  internal: SideCoverConfig;
+}
+
 export interface ProjectState {
   buildingType: BuildingType;
   dimensions: Dimensions;
@@ -103,5 +126,8 @@ export interface ProjectState {
   wallLayers: WallLayersConfig;
   wallPreset: 'custom' | 'diffusion_open' | 'diffusion_closed';
   structuralConfig: StructuralConfig;
+  topCover: TopCoverConfig;
+  wallCovers: WallCoversConfig;
   uiState: UIState;
 }
+

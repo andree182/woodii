@@ -10,9 +10,11 @@ import {
   RoofCutList,
   ScrewsCutList
 } from './bom/BOMTables';
+import { calculateCoversBOM } from '../../utils/coversCalculator';
+import CoversInstallationPlan from './bom/CoversInstallationPlan';
 
 export default function BOMTab() {
-  const [bomViewMode, setBomViewMode] = useState<'global' | 'walls'>('walls');
+  const [bomViewMode, setBomViewMode] = useState<'global' | 'walls' | 'installation'>('walls');
   const [expandedWalls, setExpandedWalls] = useState<{[key: string]: boolean}>({});
 
   const {
@@ -168,6 +170,113 @@ export default function BOMTab() {
           </tbody>
         </table>
       `;
+    };
+
+    const getSheetingLabel = (material: string) => {
+      switch (material) {
+        case 'osb_1250': return 'OSB Board (2500x1250mm)';
+        case 'osb_625': return 'OSB Board (2500x625mm)';
+        case 'plywood': return 'Construction Plywood (2440x1220mm)';
+        default: return 'None';
+      }
+    };
+
+    const getSideCoverLabel = (material: string) => {
+      switch (material) {
+        case 'rhombus': return 'Rhombus Wood Battens';
+        case 'decking': return 'Classic Wooden Decking';
+        case 'osb_1250': return 'OSB Board (2500x1250mm)';
+        case 'osb_625': return 'OSB Board (2500x625mm)';
+        case 'plasterboard': return 'Plasterboard (2000x1200mm)';
+        default: return 'None';
+      }
+    };
+
+    const generateHTMLTableForCovers = () => {
+      const coversBOM = calculateCoversBOM(state);
+      const { roof, walls, totals } = coversBOM;
+      const { topCover } = state;
+
+      let roofHtml = `
+        <h3 style="color: #444; font-size: 13px; text-transform: uppercase; margin-top: 20px; margin-bottom: 8px; border-left: 3px solid #ff8c00; padding-left: 8px; letter-spacing: 0.03em;">Roof Sheathing & Top Cover</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; border: 1px solid #ddd;">
+          <thead>
+            <tr style="background-color: #f2f2f2; font-size: 11px;">
+              <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Component</th>
+              <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Material Specification</th>
+              <th style="padding: 8px; text-align: right; border: 1px solid #ddd; width: 120px;">Area / Exposure</th>
+              <th style="padding: 8px; text-align: right; border: 1px solid #ddd; width: 120px;">Estimated Qty</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Roof Area</td>
+              <td style="padding: 8px; border: 1px solid #ddd; color: #666;">Total surface area of roof slopes</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${roof.roofArea.toFixed(2)} m²</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">-</td>
+            </tr>
+            ${topCover.sheetingMaterial !== 'none' ? `
+            <tr>
+              <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Roof Sheathing</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${getSheetingLabel(topCover.sheetingMaterial)} (${topCover.sheetingThickness * 1000}mm)</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${roof.sheetingArea.toFixed(2)} m²</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">${totals.roofSheetingSheets} sheets</td>
+            </tr>
+            ` : ''}
+            <tr>
+              <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Roof Top Cover</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-transform: capitalize;">${topCover.material} (${topCover.width}x${topCover.height}m)</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">Exp: ${topCover.visibleWidth}x${topCover.visibleHeight}m</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">
+                ${topCover.material === 'shingles' ? `${totals.roofShinglesCount} pcs` : topCover.material === 'tiles' ? `${totals.roofTilesCount} pcs` : `${totals.roofPlatesCount} pcs`}<br/>
+                <span style="font-size: 10px; font-weight: normal; color: #666;">(${roof.rowsCount} rows × ${roof.piecesPerRow} pcs)</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+
+      let wallsHtml = `
+        <h3 style="color: #444; font-size: 13px; text-transform: uppercase; margin-top: 20px; margin-bottom: 8px; border-left: 3px solid #ff8c00; padding-left: 8px; letter-spacing: 0.03em;">Wall Sheathing & Cladding Plan</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px; border: 1px solid #ddd;">
+          <thead>
+            <tr style="background-color: #f2f2f2; font-size: 11px;">
+              <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Wall Name</th>
+              <th style="padding: 8px; text-align: right; border: 1px solid #ddd; width: 80px;">Net Area</th>
+              <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">External Cladding / Lining</th>
+              <th style="padding: 8px; text-align: right; border: 1px solid #ddd; width: 120px;">Ext Qty</th>
+              <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Internal Lining</th>
+              <th style="padding: 8px; text-align: right; border: 1px solid #ddd; width: 120px;">Int Qty</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${walls.map(w => `
+              <tr style="font-size: 11px;">
+                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">${w.wallTitle}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${w.netArea.toFixed(2)} m²</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${getSideCoverLabel(w.external.material)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">
+                  ${w.external.material !== 'none' ? (
+                    w.external.material === 'rhombus' || w.external.material === 'decking'
+                      ? `${w.external.piecesCount} pcs (${w.external.linearMeters.toFixed(1)}m)`
+                      : `${w.external.piecesCount} sheets`
+                  ) : '-'}
+                </td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${getSideCoverLabel(w.internal.material)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">
+                  ${w.internal.material !== 'none' ? (
+                    w.internal.material === 'decking'
+                      ? `${w.internal.piecesCount} pcs (${w.internal.linearMeters.toFixed(1)}m)`
+                      : `${w.internal.piecesCount} sheets`
+                  ) : '-'}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+
+      return roofHtml + wallsHtml;
     };
 
     // Generate Floor sections
@@ -489,9 +598,10 @@ export default function BOMTab() {
           ${generateHTMLTableForList(floorList, 'Floor Framing')}
           ${generateHTMLTableForList(wallList, 'Wall Framing')}
           ${generateHTMLTableForList(roofList, 'Roof Framing')}
-          <div style="background-color: #fafafa; padding: 12px; border-radius: 6px; border: 1px solid #eaeaea; font-size: 12px;">
+          <div style="background-color: #fafafa; padding: 12px; border-radius: 6px; border: 1px solid #eaeaea; font-size: 12px; margin-bottom: 20px;">
             <strong>Hardware & Count Summaries:</strong> Foundation: ${foundation.type === 'slab' ? 'Concrete Slab' : 'Ground Screws'} | Screws count: ${framing.filter(m => m.type === 'screw').length} screws | Doors: ${storeFloors.reduce((acc, f) => acc + (f.walls.reduce((a, w) => a + w.subObjects.filter(o => o.type === 'door').length, 0)) + (f.internalWalls || []).reduce((a, w) => a + w.subObjects.filter(o => o.type === 'door').length, 0), 0)} | Windows: ${storeFloors.reduce((acc, f) => acc + f.walls.reduce((a, w) => a + w.subObjects.filter(o => o.type === 'window').length, 0), 0)}
           </div>
+          ${generateHTMLTableForCovers()}
         </section>
 
         <div class="page-break"></div>
@@ -602,38 +712,56 @@ export default function BOMTab() {
           >
             Global Cut List
           </button>
+          <button
+            onClick={() => setBomViewMode('installation')}
+            style={{
+              flex: 1,
+              padding: '8px',
+              backgroundColor: bomViewMode === 'installation' ? '#ff8c00' : '#333',
+              color: bomViewMode === 'installation' ? '#000' : '#ccc',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '11px',
+            }}
+          >
+            Installation Plan
+          </button>
         </div>
         
         {bomList.length === 0 ? (
           <p style={{ fontSize: '12px', color: '#666', fontStyle: 'italic' }}>No framing members generated.</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {/* Summary Totals */}
-            <div style={{
-              backgroundColor: '#1a1a1a',
-              padding: '12px',
-              borderRadius: '6px',
-              border: '1px solid #333',
-              fontSize: '11px',
-              color: '#ccc',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '4px'
-            }}>
-              <div><strong>Total 2x4 Lumber:</strong> {total2x4Length.toFixed(2)}m ({total2x4Count} pcs)</div>
-              <div><strong>Total 2x6 Lumber:</strong> {total2x6Length.toFixed(2)}m ({total2x6Count} pcs)</div>
-              <div style={{ borderTop: '1px solid #2a2a2a', marginTop: '6px', paddingTop: '6px' }}>
-                <strong>Hardware & Openings:</strong>
-                <ul style={{ margin: '4px 0 0 12px', padding: 0 }}>
-                  {doorCount > 0 && <li>Doors: {doorCount}</li>}
-                  {windowCount > 0 && <li>Windows: {windowCount}</li>}
-                  {openingCount > 0 && <li>Empty openings: {openingCount}</li>}
-                  {screwCount > 0 && <li>Ground screws: {screwCount}</li>}
-                </ul>
+            {bomViewMode !== 'installation' && (
+              /* Summary Totals */
+              <div style={{
+                backgroundColor: '#1a1a1a',
+                padding: '12px',
+                borderRadius: '6px',
+                border: '1px solid #333',
+                fontSize: '11px',
+                color: '#ccc',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px'
+              }}>
+                <div><strong>Total 2x4 Lumber:</strong> {total2x4Length.toFixed(2)}m ({total2x4Count} pcs)</div>
+                <div><strong>Total 2x6 Lumber:</strong> {total2x6Length.toFixed(2)}m ({total2x6Count} pcs)</div>
+                <div style={{ borderTop: '1px solid #2a2a2a', marginTop: '6px', paddingTop: '6px' }}>
+                  <strong>Hardware & Openings:</strong>
+                  <ul style={{ margin: '4px 0 0 12px', padding: 0 }}>
+                    {doorCount > 0 && <li>Doors: {doorCount}</li>}
+                    {windowCount > 0 && <li>Windows: {windowCount}</li>}
+                    {openingCount > 0 && <li>Empty openings: {openingCount}</li>}
+                    {screwCount > 0 && <li>Ground screws: {screwCount}</li>}
+                  </ul>
+                </div>
               </div>
-            </div>
+            )}
 
-            {bomViewMode === 'walls' ? (
+            {bomViewMode === 'walls' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '4px' }}>
                 {floors.map((floor) => {
                   const floorJoists = framing.filter(m => m.floorId === floor.id && m.type === 'joist' && !m.id.startsWith('roof-'));
@@ -986,7 +1114,9 @@ export default function BOMTab() {
                   );
                 })()}
               </div>
-            ) : (
+            )}
+
+            {bomViewMode === 'global' && (
               /* Consolidated/Global List divided by element type */
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {foundationList.length > 0 && (
@@ -1025,6 +1155,10 @@ export default function BOMTab() {
                   </div>
                 )}
               </div>
+            )}
+
+            {bomViewMode === 'installation' && (
+              <CoversInstallationPlan />
             )}
           </div>
         )}

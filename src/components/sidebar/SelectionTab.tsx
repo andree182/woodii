@@ -7,6 +7,7 @@ export default function SelectionTab() {
     roof,
     uiState,
     floors,
+    topCover,
     selectObject,
     addSubObject,
     removeSubObject,
@@ -15,6 +16,7 @@ export default function SelectionTab() {
     removeInternalWall,
     addInternalWall,
     setRoofConfig,
+    setTopCoverConfig,
     setFloorOpening,
     resetProject,
   } = useProjectStore();
@@ -728,6 +730,139 @@ export default function SelectionTab() {
                   }}
                 />
               </div>
+            </div>
+
+            {/* Top Cover Material & Dimensions */}
+            <div style={{ borderTop: '1px solid #333', paddingTop: '12px', marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <h4 style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#ff8c00', textTransform: 'uppercase' }}>Top Cover (Roof Material)</h4>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Material</label>
+                <select
+                  value={topCover.material || 'shingles'}
+                  onChange={(e) => {
+                    const material = e.target.value as any;
+                    if (material === 'shingles') {
+                      setTopCoverConfig({ material, width: 1.0, height: 0.33, visibleWidth: 1.0, visibleHeight: 0.145 });
+                    } else if (material === 'tiles') {
+                      setTopCoverConfig({ material, width: 0.33, height: 0.42, visibleWidth: 0.30, visibleHeight: 0.34 });
+                    } else if (material === 'plates') {
+                      setTopCoverConfig({ material, width: 1.0, height: 2.0, visibleWidth: 0.95, visibleHeight: 1.85 });
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    backgroundColor: '#1a1a1a',
+                    border: '1px solid #444',
+                    borderRadius: '6px',
+                    color: '#e0e0e0',
+                    fontSize: '12px'
+                  }}
+                >
+                  <option value="shingles">Asphalt Shingles</option>
+                  <option value="tiles">Concrete Tiles</option>
+                  <option value="plates">Aluminum Plates</option>
+                </select>
+              </div>
+
+              {/* Material Dimensions */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Total Width (m)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.05"
+                    value={topCover.width}
+                    onChange={(e) => setTopCoverConfig({ width: parseFloat(e.target.value) || 0.05 })}
+                    style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Total Height (m)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.05"
+                    value={topCover.height}
+                    onChange={(e) => setTopCoverConfig({ height: parseFloat(e.target.value) || 0.05 })}
+                    style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Exposure W (m)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.05"
+                    value={topCover.visibleWidth}
+                    onChange={(e) => setTopCoverConfig({ visibleWidth: parseFloat(e.target.value) || 0.05 })}
+                    style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Exposure H (m)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.05"
+                    value={topCover.visibleHeight}
+                    onChange={(e) => setTopCoverConfig({ visibleHeight: parseFloat(e.target.value) || 0.05 })}
+                    style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Roof Sheeting Configuration */}
+            <div style={{ borderTop: '1px solid #333', paddingTop: '12px', marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <h4 style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#ff8c00', textTransform: 'uppercase' }}>Roof Sheeting Underneath</h4>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Sheeting Material</label>
+                <select
+                  value={topCover.sheetingMaterial || 'osb_1250'}
+                  onChange={(e) => setTopCoverConfig({ sheetingMaterial: e.target.value as any })}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    backgroundColor: '#1a1a1a',
+                    border: '1px solid #444',
+                    borderRadius: '6px',
+                    color: '#e0e0e0',
+                    fontSize: '12px'
+                  }}
+                >
+                  <option value="osb_1250">OSB Board (2500x1250mm)</option>
+                  <option value="osb_625">OSB Board (2500x625mm)</option>
+                  <option value="plywood">Construction Plywood (2440x1220mm)</option>
+                  <option value="none">None (Open rafters / battens only)</option>
+                </select>
+              </div>
+              {topCover.sheetingMaterial !== 'none' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Sheeting Thickness (m)</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0.008"
+                    max="0.04"
+                    value={topCover.sheetingThickness}
+                    onChange={(e) => setTopCoverConfig({ sheetingThickness: parseFloat(e.target.value) || 0.015 })}
+                    style={{
+                      width: '100%',
+                      padding: '6px',
+                      backgroundColor: '#121212',
+                      border: '1px solid #333',
+                      borderRadius: '4px',
+                      color: '#e0e0e0',
+                      fontSize: '11px'
+                    }}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </section>
