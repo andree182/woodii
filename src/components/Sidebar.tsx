@@ -980,6 +980,18 @@ export default function Sidebar() {
                   Staggered Floor Blocking
                 </label>
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="checkbox"
+                  id="show-dimensions-toggle"
+                  checked={structuralConfig?.showDimensionsOnDrag !== false}
+                  onChange={(e) => setStructuralConfig({ showDimensionsOnDrag: e.target.checked })}
+                  style={{ cursor: 'pointer' }}
+                />
+                <label htmlFor="show-dimensions-toggle" style={{ fontSize: '11px', color: '#ccc', cursor: 'pointer' }}>
+                  Show Dimensions While Dragging
+                </label>
+              </div>
             </div>
           </section>
 

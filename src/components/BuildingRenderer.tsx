@@ -1,5 +1,6 @@
 import { DoubleSide, FrontSide, Side, Shape, Path, Plane, Vector3 } from 'three';
 import { useThree } from '@react-three/fiber';
+import { Html } from '@react-three/drei';
 import { useProjectStore } from '../store';
 import { Wall, Floor, InternalWall } from '../types';
 import { generateFraming } from '../utils/framingEngine';
@@ -551,6 +552,14 @@ export default function BuildingRenderer() {
                   </mesh>
                 </group>
               )}
+
+              <OpeningDragGuides
+                obj={obj}
+                length={length}
+                wallThickness={wall.thickness}
+                isDragging={uiState.isDragging && uiState.draggedId === objId}
+                showDimensions={useProjectStore.getState().structuralConfig?.showDimensionsOnDrag !== false}
+              />
             </group>
           );
         })}
@@ -1008,6 +1017,14 @@ export default function BuildingRenderer() {
                   </mesh>
                 </group>
               )}
+
+              <OpeningDragGuides
+                obj={obj}
+                length={length}
+                wallThickness={wallThickness}
+                isDragging={uiState.isDragging && uiState.draggedId === objId}
+                showDimensions={useProjectStore.getState().structuralConfig?.showDimensionsOnDrag !== false}
+              />
             </group>
           );
         })}
@@ -1426,6 +1443,139 @@ export default function BuildingRenderer() {
           </group>
         );
       })()}
+    </group>
+  );
+}
+
+const labelStyle = {
+  background: 'rgba(0, 0, 0, 0.85)',
+  color: '#ff8c00',
+  border: '1px solid #ff8c00',
+  padding: '2px 6px',
+  borderRadius: '4px',
+  fontSize: '10px',
+  fontWeight: 'bold' as const,
+  whiteSpace: 'nowrap' as const,
+  pointerEvents: 'none' as const,
+  boxShadow: '0 2px 4px rgba(0,0,0,0.5)',
+  fontFamily: 'monospace'
+};
+
+function OpeningDragGuides({
+  obj,
+  length,
+  wallThickness,
+  isDragging,
+  showDimensions
+}: {
+  obj: any;
+  length: number;
+  wallThickness: number;
+  isDragging: boolean;
+  showDimensions: boolean;
+}) {
+  if (!isDragging || !showDimensions) return null;
+
+  const gapL = obj.position - obj.width / 2;
+  const gapR = length - (obj.position + obj.width / 2);
+  const hasElevation = obj.elevation > 0.05;
+
+  return (
+    <group>
+      {/* Left Gap Guide */}
+      {gapL > 0.02 && (
+        <group>
+          {/* Horizontal guide line */}
+          <mesh position={[(-obj.position - obj.width / 2) / 2, 0, 0]}>
+            <boxGeometry args={[gapL, 0.015, 0.015]} />
+            <meshBasicMaterial color="#ff8c00" opacity={0.6} transparent />
+          </mesh>
+          {/* Left tick mark (at wall start) */}
+          <mesh position={[-obj.position, 0, 0]}>
+            <boxGeometry args={[0.015, 0.1, 0.015]} />
+            <meshBasicMaterial color="#ff8c00" opacity={0.8} transparent />
+          </mesh>
+          {/* Right tick mark (at opening left edge) */}
+          <mesh position={[-obj.width / 2, 0, 0]}>
+            <boxGeometry args={[0.015, 0.1, 0.015]} />
+            <meshBasicMaterial color="#ff8c00" opacity={0.8} transparent />
+          </mesh>
+          {/* Left Gap Label */}
+          <Html position={[(-obj.position - obj.width / 2) / 2, 0.12, 0]} center>
+            <div style={labelStyle}>
+              {(gapL * 100).toFixed(0)} cm
+            </div>
+          </Html>
+        </group>
+      )}
+
+      {/* Right Gap Guide */}
+      {gapR > 0.02 && (
+        <group>
+          {/* Horizontal guide line */}
+          <mesh position={[(obj.width / 2 + (length - obj.position)) / 2, 0, 0]}>
+            <boxGeometry args={[gapR, 0.015, 0.015]} />
+            <meshBasicMaterial color="#ff8c00" opacity={0.6} transparent />
+          </mesh>
+          {/* Left tick mark (at opening right edge) */}
+          <mesh position={[obj.width / 2, 0, 0]}>
+            <boxGeometry args={[0.015, 0.1, 0.015]} />
+            <meshBasicMaterial color="#ff8c00" opacity={0.8} transparent />
+          </mesh>
+          {/* Right tick mark (at wall end) */}
+          <mesh position={[length - obj.position, 0, 0]}>
+            <boxGeometry args={[0.015, 0.1, 0.015]} />
+            <meshBasicMaterial color="#ff8c00" opacity={0.8} transparent />
+          </mesh>
+          {/* Right Gap Label */}
+          <Html position={[(obj.width / 2 + (length - obj.position)) / 2, 0.12, 0]} center>
+            <div style={labelStyle}>
+              {(gapR * 100).toFixed(0)} cm
+            </div>
+          </Html>
+        </group>
+      )}
+
+      {/* Width Label (top center of opening) */}
+      <Html position={[0, obj.height / 2 + 0.12, 0]} center>
+        <div style={labelStyle}>
+          W: {(obj.width * 100).toFixed(0)} cm
+        </div>
+      </Html>
+
+      {/* Height Label (right side of opening) */}
+      <Html position={[obj.width / 2 + 0.15, 0, 0]} center>
+        <div style={labelStyle}>
+          H: {(obj.height * 100).toFixed(0)} cm
+        </div>
+      </Html>
+
+      {/* Elevation Guide & Label */}
+      {hasElevation && (
+        <group>
+          {/* Vertical guide line */}
+          <mesh position={[-obj.width / 2 - 0.1, -obj.height / 2 - obj.elevation / 2, 0]}>
+            <boxGeometry args={[0.015, obj.elevation, 0.015]} />
+            <meshBasicMaterial color="#ff8c00" opacity={0.6} transparent />
+          </mesh>
+          {/* Bottom tick mark (at wall bottom) */}
+          <mesh position={[-obj.width / 2 - 0.1, -obj.height / 2 - obj.elevation, 0]}>
+            <boxGeometry args={[0.1, 0.015, 0.015]} />
+            <meshBasicMaterial color="#ff8c00" opacity={0.8} transparent />
+          </mesh>
+          {/* Top tick mark (at opening bottom) */}
+          <mesh position={[-obj.width / 2 - 0.1, -obj.height / 2, 0]}>
+            <boxGeometry args={[0.1, 0.015, 0.015]} />
+            <meshBasicMaterial color="#ff8c00" opacity={0.8} transparent />
+          </mesh>
+          {/* Elevation Label */}
+          <Html position={[-obj.width / 2 - 0.1, -obj.height / 2 - obj.elevation / 2, 0]} center>
+            <div style={labelStyle}>
+              Elev: {(obj.elevation * 100).toFixed(0)} cm
+            </div>
+          </Html>
+        </group>
+      )}
     </group>
   );
 }

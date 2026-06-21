@@ -90,6 +90,7 @@ export interface WallLayersConfig {
 export interface StructuralConfig {
   wallBlocking: boolean;
   floorBlocking: boolean;
+  showDimensionsOnDrag?: boolean;
 }
 
 export interface ProjectState {

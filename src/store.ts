@@ -163,6 +163,7 @@ const INITIAL_PROJECT_STATE = {
   structuralConfig: {
     wallBlocking: false,
     floorBlocking: false,
+    showDimensionsOnDrag: true,
   },
   uiState: {
     selectedId: null,
@@ -1527,7 +1528,13 @@ export const useProjectStore = create<ProjectStore>()(
       foundation: project.foundation || state.foundation,
       wallLayers: project.wallLayers || state.wallLayers,
       wallPreset: project.wallPreset || state.wallPreset,
-      structuralConfig: project.structuralConfig || state.structuralConfig || { wallBlocking: false, floorBlocking: false },
+      structuralConfig: {
+        wallBlocking: false,
+        floorBlocking: false,
+        showDimensionsOnDrag: true,
+        ...(state.structuralConfig || {}),
+        ...(project.structuralConfig || {})
+      },
       floors: project.floors,
       uiState: { ...state.uiState, selectedId: null, selectedType: null }
     };
