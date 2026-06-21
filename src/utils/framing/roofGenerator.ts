@@ -33,7 +33,16 @@ export function generateRoof(state: ProjectState): FramingMember[] {
     internalZs.push(-depth / 2 + i * internalSpacing);
   }
 
-  const rafterZs = [backFlyZ, backWallZ, ...internalZs, frontWallZ, frontFlyZ];
+  const rafterZs: number[] = [];
+  if (overhang > 0.01) {
+    rafterZs.push(backFlyZ);
+  }
+  rafterZs.push(backWallZ);
+  rafterZs.push(...internalZs);
+  rafterZs.push(frontWallZ);
+  if (overhang > 0.01) {
+    rafterZs.push(frontFlyZ);
+  }
 
   if (type === 'flat') {
     // Flat roof joists/rafters sloping along inclination
@@ -62,13 +71,15 @@ export function generateRoof(state: ProjectState): FramingMember[] {
       size: [lumberThickness, ridgeHeight, ridgeLength],
     });
 
+    const ridgeThickness = lumberThickness; // 0.04m
     const halfRoofWidth = halfGableWidth + overhang;
-    const slopeLength = halfRoofWidth / Math.cos(angleRad);
+    const horizontalSpan = halfRoofWidth - ridgeThickness / 2;
+    const slopeLength = horizontalSpan / Math.cos(angleRad);
 
     rafterZs.forEach((rz, idx) => {
       // Right slope rafters
-      const rightX = halfRoofWidth / 2;
-      const rightY = topElevation + (halfGableWidth - halfRoofWidth / 2) * Math.tan(angleRad) + (rafterHeight / 2) / Math.cos(angleRad);
+      const rightX = ridgeThickness / 2 + horizontalSpan / 2;
+      const rightY = topElevation + (halfGableWidth - rightX) * Math.tan(angleRad) + (rafterHeight / 2) / Math.cos(angleRad);
       members.push({
         id: `roof-rafter-saddle-right-${idx}`,
         type: 'rafter',
@@ -78,8 +89,8 @@ export function generateRoof(state: ProjectState): FramingMember[] {
       });
 
       // Left slope rafters
-      const leftX = -halfRoofWidth / 2;
-      const leftY = topElevation + (halfGableWidth - halfRoofWidth / 2) * Math.tan(angleRad) + (rafterHeight / 2) / Math.cos(angleRad);
+      const leftX = -rightX;
+      const leftY = rightY;
       members.push({
         id: `roof-rafter-saddle-left-${idx}`,
         type: 'rafter',

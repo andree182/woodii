@@ -37,8 +37,8 @@ export default function RoofRenderer() {
 
   // Slope Geometry details
   let slopeLength = 0;
-  let halfGableWidth = width / 2 + wallThickness * 0.5;
-  let halfRoofWidth = halfGableWidth + overhang;
+  const halfGableWidth = width / 2 + wallThickness * 0.5;
+  const halfRoofWidth = halfGableWidth + overhang;
 
   if (type === 'flat') {
     slopeLength = (width + wallThickness) / Math.cos(angleRad) + overhang * 2;
@@ -156,29 +156,47 @@ export default function RoofRenderer() {
     return <group>{shingles}</group>;
   };
 
-  // Helper: Renders sloped trims (Gable Wind Board)
-  const renderGableTrim = (slopeL: number, zPos: number) => {
+  // Helper: creates a sloped parallelogram shape with plumb-cut vertical ends in local coordinates
+  const createSlopeShape = (L: number, H: number) => {
+    const shape = new Shape();
+    const tanTheta = Math.tan(angleRad);
+    
+    // Bottom-left corner: y = 0
+    shape.moveTo(0, 0);
+    // Bottom-right corner: y = 0
+    shape.lineTo(L, 0);
+    // Top-right corner: y = H
+    shape.lineTo(L - H * tanTheta, H);
+    // Top-left corner: y = H
+    shape.lineTo(-H * tanTheta, H);
+    shape.closePath();
+    return shape;
+  };
+
+  // Helper: Renders sloped trims (Gable Wind Board) with vertical plumb-cut ends
+  const renderGableTrim = (slopeL: number, zPos: number, isLeft: boolean) => {
     if (roofCovers.gableMaterial === 'none') return null;
     const boardH = roofCovers.gableHeight || 0.18;
     const boardT = roofCovers.gableThickness || 0.02;
     const color = '#5c3a21';
 
-    // Slanted board positioned along gable end
+    const trimShape = createSlopeShape(slopeL, boardH);
+
     return (
-      <mesh position={[slopeL / 2, 0.14 - boardH / 2 + 0.04, zPos]} rotation={[0, 0, 0]}>
-        <boxGeometry args={[slopeL, boardH, boardT]} />
+      <mesh position={[0, 0.14 - boardH + 0.04, zPos - boardT / 2]} rotation={[0, 0, 0]}>
+        <extrudeGeometry args={[trimShape, { depth: boardT, bevelEnabled: false }]} />
         <meshStandardMaterial color={color} roughness={0.7} />
       </mesh>
     );
   };
 
   // Render method for a single slope group
-  const renderSlopeAssembly = (posX: number, posY: number, rotZ: number) => {
+  const renderSlopeAssembly = (posX: number, posY: number, rotation: [number, number, number], isLeft: boolean) => {
     const isSelected = uiState.selectedId === 'roof';
     const activeColor = isSelected ? '#ff8c00' : matProps.color;
 
     return (
-      <group position={[posX, posY, 0]} rotation={[0, 0, rotZ]}>
+      <group position={[posX, posY, 0]} rotation={rotation}>
         {mode === 'sheathing' ? (
           <>
             {/* 1. Rafter Soffit (Bottom Cover) */}
@@ -197,38 +215,36 @@ export default function RoofRenderer() {
             {/* 4. Gable Wind Boards */}
             {roofCovers.gableMaterial !== 'none' && (
               <>
-                {renderGableTrim(slopeLength, roofDepth / 2 - gableThickness / 2)}
-                {renderGableTrim(slopeLength, -roofDepth / 2 + gableThickness / 2)}
+                {renderGableTrim(slopeLength, roofDepth / 2 - gableThickness / 2, isLeft)}
+                {renderGableTrim(slopeLength, -roofDepth / 2 + gableThickness / 2, isLeft)}
               </>
-            )}
-
-            {/* 5. Eaves Fascia Board */}
-            {roofCovers.fasciaMaterial !== 'none' && (
-              <mesh position={[slopeLength + roofCovers.fasciaThickness / 2, 0.14 - roofCovers.fasciaHeight / 2 + 0.04, 0]}>
-                <boxGeometry args={[roofCovers.fasciaThickness, roofCovers.fasciaHeight, roofDepth]} />
-                <meshStandardMaterial color="#5c3a21" roughness={0.7} />
-              </mesh>
             )}
           </>
         ) : (
           /* Solid or See-through Mode: Render full slope block */
           <group>
-            <mesh
-              position={[slopeLength / 2, thickness / 2 + 0.14, 0]}
-              castShadow
-              receiveShadow
-              onClick={(e) => {
-                e.stopPropagation();
-                selectObject('roof', 'roof');
-              }}
-            >
-              <boxGeometry args={[slopeLength, thickness, roofDepth]} />
-              <meshStandardMaterial
-                {...matProps}
-                color={activeColor}
-                roughness={0.5}
-              />
-            </mesh>
+            {(() => {
+              const H = 0.14 + thickness;
+              const shape = createSlopeShape(slopeLength, H);
+              return (
+                <mesh
+                  position={[0, 0, -roofDepth / 2]}
+                  castShadow
+                  receiveShadow
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    selectObject('roof', 'roof');
+                  }}
+                >
+                  <extrudeGeometry args={[shape, { depth: roofDepth, bevelEnabled: false }]} />
+                  <meshStandardMaterial
+                    {...matProps}
+                    color={activeColor}
+                    roughness={0.5}
+                  />
+                </mesh>
+              );
+            })()}
             
             {/* Show detailed shingles on top of Solid mode for extra premium look */}
             {mode === 'solid' && renderShinglesSlope(roofDepth - gableThickness * 2, slopeLength)}
@@ -239,12 +255,40 @@ export default function RoofRenderer() {
   };
 
   if (type === 'flat') {
-    const tVertical = thickness / Math.cos(angleRad);
-    const rightSlopeY = topElevation + (width / 2 + wallThickness / 2) * Math.tan(angleRad) + tVertical * 0.5;
+    const posX = - (slopeLength / 2) * Math.cos(angleRad);
+    const posY = topElevation + (width / 2 + wallThickness / 2) * Math.tan(angleRad) + (slopeLength / 2) * Math.sin(angleRad);
+
+    const halfFlatRoofWidth = (slopeLength / 2) * Math.cos(angleRad);
+    const rafterHeight = 0.14;
+    const Y_rafter_top_right = posY - halfFlatRoofWidth * Math.tan(angleRad) + (rafterHeight / 2) / Math.cos(angleRad);
+    const Y_rafter_top_left = posY + halfFlatRoofWidth * Math.tan(angleRad) + (rafterHeight / 2) / Math.cos(angleRad);
 
     return (
       <group onClick={(e) => { e.stopPropagation(); selectObject('roof', 'roof'); }}>
-        {renderSlopeAssembly(0, rightSlopeY, -angleRad)}
+        {renderSlopeAssembly(posX, posY, [0, 0, -angleRad], false)}
+
+        {/* Eaves Fascia Boards (Vertical Cladding) in sheathing mode */}
+        {mode === 'sheathing' && roofCovers.fasciaMaterial !== 'none' && (
+          <>
+            {/* Low End (Right) Fascia */}
+            <mesh
+              position={[halfFlatRoofWidth + roofCovers.fasciaThickness / 2, Y_rafter_top_right - roofCovers.fasciaHeight / 2, 0]}
+              rotation={[0, 0, 0]}
+            >
+              <boxGeometry args={[roofCovers.fasciaThickness, roofCovers.fasciaHeight, roofDepth]} />
+              <meshStandardMaterial color="#5c3a21" roughness={0.7} />
+            </mesh>
+
+            {/* High End (Left) Fascia */}
+            <mesh
+              position={[-halfFlatRoofWidth - roofCovers.fasciaThickness / 2, Y_rafter_top_left - roofCovers.fasciaHeight / 2, 0]}
+              rotation={[0, 0, 0]}
+            >
+              <boxGeometry args={[roofCovers.fasciaThickness, roofCovers.fasciaHeight, roofDepth]} />
+              <meshStandardMaterial color="#5c3a21" roughness={0.7} />
+            </mesh>
+          </>
+        )}
       </group>
     );
   } else {
@@ -259,6 +303,8 @@ export default function RoofRenderer() {
       return shape;
     };
 
+    const Y_rafter_top_eave = topElevation - overhang * Math.tan(angleRad) + 0.14 / Math.cos(angleRad);
+
     return (
       <group
         onClick={(e) => {
@@ -267,10 +313,33 @@ export default function RoofRenderer() {
         }}
       >
         {/* Right slope assembly */}
-        {renderSlopeAssembly(0, topElevation + halfGableWidth * Math.tan(angleRad), -angleRad)}
+        {renderSlopeAssembly(0, topElevation + halfGableWidth * Math.tan(angleRad), [0, 0, -angleRad], false)}
 
         {/* Left slope assembly */}
-        {renderSlopeAssembly(0, topElevation + halfGableWidth * Math.tan(angleRad), angleRad)}
+        {renderSlopeAssembly(0, topElevation + halfGableWidth * Math.tan(angleRad), [0, Math.PI, -angleRad], true)}
+
+        {/* Eaves Fascia Boards (Vertical Cladding) in sheathing mode */}
+        {mode === 'sheathing' && roofCovers.fasciaMaterial !== 'none' && (
+          <>
+            {/* Right Eave Fascia */}
+            <mesh
+              position={[halfRoofWidth + roofCovers.fasciaThickness / 2, Y_rafter_top_eave - roofCovers.fasciaHeight / 2, 0]}
+              rotation={[0, 0, 0]}
+            >
+              <boxGeometry args={[roofCovers.fasciaThickness, roofCovers.fasciaHeight, roofDepth]} />
+              <meshStandardMaterial color="#5c3a21" roughness={0.7} />
+            </mesh>
+
+            {/* Left Eave Fascia */}
+            <mesh
+              position={[-halfRoofWidth - roofCovers.fasciaThickness / 2, Y_rafter_top_eave - roofCovers.fasciaHeight / 2, 0]}
+              rotation={[0, 0, 0]}
+            >
+              <boxGeometry args={[roofCovers.fasciaThickness, roofCovers.fasciaHeight, roofDepth]} />
+              <meshStandardMaterial color="#5c3a21" roughness={0.7} />
+            </mesh>
+          </>
+        )}
 
         {/* Gable wall fillings */}
         {!matProps.wireframe && (

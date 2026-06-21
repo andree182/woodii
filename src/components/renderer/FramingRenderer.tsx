@@ -135,7 +135,7 @@ export default function FramingRenderer() {
         }
 
         // Special rendering for mitered rafters
-        if (member.type === 'rafter' && member.id.includes('saddle')) {
+        if (member.type === 'rafter') {
           const [width, height, thickness] = member.size;
           const rafterLength = width;
           const rafterHeight = height;
