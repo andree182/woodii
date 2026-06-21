@@ -136,6 +136,7 @@ export default function ThreeCanvas() {
         camera={{ position: [6, 6, 8], fov: 50 }}
         shadows
         onPointerMissed={() => selectObject(null, null)}
+        frameloop={viewMode === 'walking' ? 'always' : 'demand'}
       >
         <ambientLight intensity={0.6} />
         <directionalLight
