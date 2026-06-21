@@ -174,7 +174,7 @@ export default function RoofRenderer() {
   };
 
   // Helper: Renders sloped trims (Gable Wind Board) with vertical plumb-cut ends
-  const renderGableTrim = (slopeL: number, zPos: number, isLeft: boolean) => {
+  const renderGableTrim = (slopeL: number, zPos: number) => {
     if (roofCovers.gableMaterial === 'none') return null;
     const boardH = roofCovers.gableHeight || 0.18;
     const boardT = roofCovers.gableThickness || 0.02;
@@ -191,7 +191,7 @@ export default function RoofRenderer() {
   };
 
   // Render method for a single slope group
-  const renderSlopeAssembly = (posX: number, posY: number, rotation: [number, number, number], isLeft: boolean) => {
+  const renderSlopeAssembly = (posX: number, posY: number, rotation: [number, number, number]) => {
     const isSelected = uiState.selectedId === 'roof';
     const activeColor = isSelected ? '#ff8c00' : matProps.color;
 
@@ -215,8 +215,8 @@ export default function RoofRenderer() {
             {/* 4. Gable Wind Boards */}
             {roofCovers.gableMaterial !== 'none' && (
               <>
-                {renderGableTrim(slopeLength, roofDepth / 2 - gableThickness / 2, isLeft)}
-                {renderGableTrim(slopeLength, -roofDepth / 2 + gableThickness / 2, isLeft)}
+                {renderGableTrim(slopeLength, roofDepth / 2 - gableThickness / 2)}
+                {renderGableTrim(slopeLength, -roofDepth / 2 + gableThickness / 2)}
               </>
             )}
           </>
@@ -265,7 +265,7 @@ export default function RoofRenderer() {
 
     return (
       <group onClick={(e) => { e.stopPropagation(); selectObject('roof', 'roof'); }}>
-        {renderSlopeAssembly(posX, posY, [0, 0, -angleRad], false)}
+        {renderSlopeAssembly(posX, posY, [0, 0, -angleRad])}
 
         {/* Eaves Fascia Boards (Vertical Cladding) in sheathing mode */}
         {mode === 'sheathing' && roofCovers.fasciaMaterial !== 'none' && (
@@ -313,10 +313,10 @@ export default function RoofRenderer() {
         }}
       >
         {/* Right slope assembly */}
-        {renderSlopeAssembly(0, topElevation + halfGableWidth * Math.tan(angleRad), [0, 0, -angleRad], false)}
+        {renderSlopeAssembly(0, topElevation + halfGableWidth * Math.tan(angleRad), [0, 0, -angleRad])}
 
         {/* Left slope assembly */}
-        {renderSlopeAssembly(0, topElevation + halfGableWidth * Math.tan(angleRad), [0, Math.PI, -angleRad], true)}
+        {renderSlopeAssembly(0, topElevation + halfGableWidth * Math.tan(angleRad), [0, Math.PI, -angleRad])}
 
         {/* Eaves Fascia Boards (Vertical Cladding) in sheathing mode */}
         {mode === 'sheathing' && roofCovers.fasciaMaterial !== 'none' && (
