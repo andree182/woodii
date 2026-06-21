@@ -5,6 +5,9 @@ import { useProjectStore } from '../store';
 import BuildingRenderer from './BuildingRenderer';
 import { Vector3 } from 'three';
 
+const ORTHO_POS: [number, number, number] = [0, 15, 0.001];
+const PERSPECT_POS: [number, number, number] = [6, 6, 8];
+
 // walking controller handles keyboard movement inside house footprints
 function WalkingController({ heightPerFloor, currentFloor, buildingWidth, buildingDepth }: { heightPerFloor: number, currentFloor: number, buildingWidth: number, buildingDepth: number }) {
   const { camera } = useThree();
@@ -82,6 +85,7 @@ function WalkingController({ heightPerFloor, currentFloor, buildingWidth, buildi
 // camera updater resets views and focus targets when view mode changes
 function CameraUpdater({ viewMode, currentFloor, heightPerFloor }: { viewMode: string; currentFloor: number; heightPerFloor: number }) {
   const { camera, controls } = useThree();
+  const lastViewMode = useRef<string | null>(null);
 
   useEffect(() => {
     if (viewMode === 'topDown') {
@@ -92,7 +96,7 @@ function CameraUpdater({ viewMode, currentFloor, heightPerFloor }: { viewMode: s
         (controls as any).target.set(0, targetY, 0);
         (controls as any).update();
       }
-    } else if (viewMode === '3D') {
+    } else if (viewMode === '3D' && lastViewMode.current !== '3D') {
       camera.position.set(6, 6, 8);
       camera.lookAt(0, 1.2, 0);
       if (controls && (controls as any).target) {
@@ -100,6 +104,7 @@ function CameraUpdater({ viewMode, currentFloor, heightPerFloor }: { viewMode: s
         (controls as any).update();
       }
     }
+    lastViewMode.current = viewMode;
   }, [viewMode, currentFloor, heightPerFloor, camera, controls]);
 
   return null;
@@ -149,7 +154,7 @@ export default function ThreeCanvas() {
         {viewMode === 'topDown' ? (
           <OrthographicCamera
             makeDefault
-            position={[0, 15, 0.001]}
+            position={ORTHO_POS}
             zoom={60}
             near={0.1}
             far={100}
@@ -157,7 +162,7 @@ export default function ThreeCanvas() {
         ) : (
           <PerspectiveCamera
             makeDefault
-            position={[6, 6, 8]}
+            position={PERSPECT_POS}
             fov={50}
             near={0.1}
             far={100}

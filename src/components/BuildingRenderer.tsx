@@ -1,9 +1,11 @@
 import { DoubleSide, FrontSide, Side, Shape, Path, Plane, Vector3 } from 'three';
+import { useThree } from '@react-three/fiber';
 import { useProjectStore } from '../store';
 import { Wall, Floor, InternalWall } from '../types';
 import { generateFraming } from '../utils/framingEngine';
 
 export default function BuildingRenderer() {
+  const { controls } = useThree();
   const dimensions = useProjectStore((state) => state.dimensions);
   const floors = useProjectStore((state) => state.floors);
   const roof = useProjectStore((state) => state.roof);
@@ -316,11 +318,13 @@ export default function BuildingRenderer() {
             onClick={(e) => e.stopPropagation()}
             onPointerDown={(e) => {
               e.stopPropagation();
+              if (controls) (controls as any).enabled = false;
               startDragging(wallId, 'wallHandle');
               (e.target as any).setPointerCapture?.(e.pointerId);
             }}
             onPointerUp={(e) => {
               e.stopPropagation();
+              if (controls) (controls as any).enabled = true;
               stopDragging();
               (e.target as any).releasePointerCapture?.(e.pointerId);
             }}
@@ -329,8 +333,9 @@ export default function BuildingRenderer() {
                 e.stopPropagation();
                 const floorPlane = new Plane(new Vector3(0, 1, 0), -(level * heightPerFloor + customHeight / 2));
                 const intersection = new Vector3();
-                e.ray.intersectPlane(floorPlane, intersection);
-                updateDragPosition([intersection.x, intersection.y, intersection.z]);
+                if (e.ray.intersectPlane(floorPlane, intersection)) {
+                  updateDragPosition([intersection.x, intersection.y, intersection.z]);
+                }
               }
             }}
             onPointerOver={(e) => {
@@ -421,11 +426,13 @@ export default function BuildingRenderer() {
                 onPointerDown={(e) => {
                   e.stopPropagation();
                   selectObject(objId, 'subObject');
+                  if (controls) (controls as any).enabled = false;
                   startDragging(objId, 'subObject');
                   (e.target as any).setPointerCapture?.(e.pointerId);
                 }}
                 onPointerUp={(e) => {
                   e.stopPropagation();
+                  if (controls) (controls as any).enabled = true;
                   stopDragging();
                   (e.target as any).releasePointerCapture?.(e.pointerId);
                 }}
@@ -438,8 +445,9 @@ export default function BuildingRenderer() {
                       new Vector3(wallCenterX, 0, wallCenterZ)
                     );
                     const intersection = new Vector3();
-                    e.ray.intersectPlane(wallPlane, intersection);
-                    updateDragPosition([intersection.x, intersection.y, intersection.z]);
+                    if (e.ray.intersectPlane(wallPlane, intersection)) {
+                      updateDragPosition([intersection.x, intersection.y, intersection.z]);
+                    }
                   }
                 }}
                 onPointerOver={(e) => {
@@ -689,18 +697,19 @@ export default function BuildingRenderer() {
             // Calculate initial drag offset in world coordinates projected on floor plane
             const floorPlane = new Plane(new Vector3(0, 1, 0), -(level * heightPerFloor));
             const intersection = new Vector3();
-            e.ray.intersectPlane(floorPlane, intersection);
-            
-            const offset: [number, number] = [
-              wall.start[0] - intersection.x,
-              wall.start[1] - intersection.z
-            ];
-            
-            startDragging(wallId, 'internalWall', offset);
-            (e.target as any).setPointerCapture?.(e.pointerId);
+            if (e.ray.intersectPlane(floorPlane, intersection)) {
+              const offset: [number, number] = [
+                wall.start[0] - intersection.x,
+                wall.start[1] - intersection.z
+              ];
+              if (controls) (controls as any).enabled = false;
+              startDragging(wallId, 'internalWall', offset);
+              (e.target as any).setPointerCapture?.(e.pointerId);
+            }
           }}
           onPointerUp={(e) => {
             e.stopPropagation();
+            if (controls) (controls as any).enabled = true;
             stopDragging();
             (e.target as any).releasePointerCapture?.(e.pointerId);
           }}
@@ -709,8 +718,9 @@ export default function BuildingRenderer() {
               e.stopPropagation();
               const floorPlane = new Plane(new Vector3(0, 1, 0), -(level * heightPerFloor));
               const intersection = new Vector3();
-              e.ray.intersectPlane(floorPlane, intersection);
-              updateDragPosition([intersection.x, intersection.y, intersection.z]);
+              if (e.ray.intersectPlane(floorPlane, intersection)) {
+                updateDragPosition([intersection.x, intersection.y, intersection.z]);
+              }
             }
           }}
           onPointerOver={(e) => {
@@ -734,11 +744,13 @@ export default function BuildingRenderer() {
               position={[0, wallBaseHeight / 2, 0]}
               onPointerDown={(e) => {
                 e.stopPropagation();
+                if (controls) (controls as any).enabled = false;
                 startDragging(wallId, 'internalWallStart');
                 (e.target as any).setPointerCapture?.(e.pointerId);
               }}
               onPointerUp={(e) => {
                 e.stopPropagation();
+                if (controls) (controls as any).enabled = true;
                 stopDragging();
                 (e.target as any).releasePointerCapture?.(e.pointerId);
               }}
@@ -747,8 +759,9 @@ export default function BuildingRenderer() {
                   e.stopPropagation();
                   const floorPlane = new Plane(new Vector3(0, 1, 0), -(level * heightPerFloor));
                   const intersection = new Vector3();
-                  e.ray.intersectPlane(floorPlane, intersection);
-                  updateDragPosition([intersection.x, intersection.y, intersection.z]);
+                  if (e.ray.intersectPlane(floorPlane, intersection)) {
+                    updateDragPosition([intersection.x, intersection.y, intersection.z]);
+                  }
                 }
               }}
               onPointerOver={(e) => {
@@ -769,11 +782,13 @@ export default function BuildingRenderer() {
               position={[length, wallBaseHeight / 2, 0]}
               onPointerDown={(e) => {
                 e.stopPropagation();
+                if (controls) (controls as any).enabled = false;
                 startDragging(wallId, 'internalWallEnd');
                 (e.target as any).setPointerCapture?.(e.pointerId);
               }}
               onPointerUp={(e) => {
                 e.stopPropagation();
+                if (controls) (controls as any).enabled = true;
                 stopDragging();
                 (e.target as any).releasePointerCapture?.(e.pointerId);
               }}
@@ -782,8 +797,9 @@ export default function BuildingRenderer() {
                   e.stopPropagation();
                   const floorPlane = new Plane(new Vector3(0, 1, 0), -(level * heightPerFloor));
                   const intersection = new Vector3();
-                  e.ray.intersectPlane(floorPlane, intersection);
-                  updateDragPosition([intersection.x, intersection.y, intersection.z]);
+                  if (e.ray.intersectPlane(floorPlane, intersection)) {
+                    updateDragPosition([intersection.x, intersection.y, intersection.z]);
+                  }
                 }
               }}
               onPointerOver={(e) => {
@@ -813,17 +829,19 @@ export default function BuildingRenderer() {
                   e.stopPropagation();
                   const floorPlane = new Plane(new Vector3(0, 1, 0), -(level * heightPerFloor));
                   const intersection = new Vector3();
-                  e.ray.intersectPlane(floorPlane, intersection);
-                  
-                  const cx = (wall.start[0] + wall.end[0]) / 2;
-                  const cz = (wall.start[1] + wall.end[1]) / 2;
-                  const initialAngle = Math.atan2(intersection.z - cz, intersection.x - cx);
-                  
-                  startDragging(wallId, 'internalWallRotate', [initialAngle, rotationY]);
-                  (e.target as any).setPointerCapture?.(e.pointerId);
+                  if (e.ray.intersectPlane(floorPlane, intersection)) {
+                    const cx = (wall.start[0] + wall.end[0]) / 2;
+                    const cz = (wall.start[1] + wall.end[1]) / 2;
+                    const initialAngle = Math.atan2(intersection.z - cz, intersection.x - cx);
+                    
+                    if (controls) (controls as any).enabled = false;
+                    startDragging(wallId, 'internalWallRotate', [initialAngle, rotationY]);
+                    (e.target as any).setPointerCapture?.(e.pointerId);
+                  }
                 }}
                 onPointerUp={(e) => {
                   e.stopPropagation();
+                  if (controls) (controls as any).enabled = true;
                   stopDragging();
                   (e.target as any).releasePointerCapture?.(e.pointerId);
                 }}
@@ -832,8 +850,9 @@ export default function BuildingRenderer() {
                     e.stopPropagation();
                     const floorPlane = new Plane(new Vector3(0, 1, 0), -(level * heightPerFloor));
                     const intersection = new Vector3();
-                    e.ray.intersectPlane(floorPlane, intersection);
-                    updateDragPosition([intersection.x, intersection.y, intersection.z]);
+                    if (e.ray.intersectPlane(floorPlane, intersection)) {
+                      updateDragPosition([intersection.x, intersection.y, intersection.z]);
+                    }
                   }
                 }}
                 onPointerOver={(e) => {
@@ -922,11 +941,13 @@ export default function BuildingRenderer() {
                 onPointerDown={(e) => {
                   e.stopPropagation();
                   selectObject(objId, 'subObject');
+                  if (controls) (controls as any).enabled = false;
                   startDragging(objId, 'subObject');
                   (e.target as any).setPointerCapture?.(e.pointerId);
                 }}
                 onPointerUp={(e) => {
                   e.stopPropagation();
+                  if (controls) (controls as any).enabled = true;
                   stopDragging();
                   (e.target as any).releasePointerCapture?.(e.pointerId);
                 }}
@@ -939,8 +960,9 @@ export default function BuildingRenderer() {
                       new Vector3(wallCenterX, 0, wallCenterZ)
                     );
                     const intersection = new Vector3();
-                    e.ray.intersectPlane(wallPlane, intersection);
-                    updateDragPosition([intersection.x, intersection.y, intersection.z]);
+                    if (e.ray.intersectPlane(wallPlane, intersection)) {
+                      updateDragPosition([intersection.x, intersection.y, intersection.z]);
+                    }
                   }
                 }}
                 onPointerOver={(e) => {
@@ -1355,14 +1377,17 @@ export default function BuildingRenderer() {
                 const theta = roof.inclination * Math.PI / 180;
                 const tanTheta = Math.tan(theta);
                 
+                const isLeftRafter = member.id.includes('left');
+                const sign = isLeftRafter ? -1 : 1;
+                
                 const rafterShape = new Shape();
                 const halfL = rafterLength / 2;
                 const halfH = rafterHeight / 2;
                 
-                rafterShape.moveTo(-halfL - halfH * tanTheta, -halfH);
-                rafterShape.lineTo(halfL - halfH * tanTheta, -halfH);
-                rafterShape.lineTo(halfL + halfH * tanTheta, halfH);
-                rafterShape.lineTo(-halfL + halfH * tanTheta, halfH);
+                rafterShape.moveTo(-halfL - sign * halfH * tanTheta, -halfH);
+                rafterShape.lineTo(halfL - sign * halfH * tanTheta, -halfH);
+                rafterShape.lineTo(halfL + sign * halfH * tanTheta, halfH);
+                rafterShape.lineTo(-halfL + sign * halfH * tanTheta, halfH);
                 rafterShape.closePath();
 
                 return (

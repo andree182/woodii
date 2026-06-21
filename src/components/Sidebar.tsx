@@ -1,5 +1,6 @@
 import { useState, ChangeEvent, useEffect } from 'react';
 import { useProjectStore } from '../store';
+import { RoofConfig } from '../types';
 
 import { generateFraming, FramingMember } from '../utils/framingEngine';
 import { DEMO_PROJECTS } from '../utils/demos';
@@ -81,9 +82,9 @@ export default function Sidebar() {
   const selectedId = uiState.selectedId;
   const selectedType = uiState.selectedType;
 
-  // Automatically switch to selection tab when any element (wall, door/window, floor, roof) is clicked/selected
+  // Automatically switch to selection tab when any element (wall, door/window, floor, roof) is clicked/selected (except when we are on BOM tab)
   useEffect(() => {
-    if (selectedType && selectedType !== null) {
+    if (selectedType && selectedType !== null && activeTab !== 'bom') {
       setActiveTab('selection');
     }
   }, [selectedId, selectedType]);
@@ -162,7 +163,7 @@ export default function Sidebar() {
     }
   };
 
-  const handleRoofChange = (key: 'inclination' | 'overhang' | 'thickness', val: number) => {
+  const handleRoofChange = (key: keyof RoofConfig, val: any) => {
     setRoofConfig({ [key]: val });
   };
 
@@ -231,6 +232,378 @@ export default function Sidebar() {
     return found ? found.idNum : '';
   };
 
+  const handleExportBlueprint = () => {
+    const state = useProjectStore.getState();
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert("Please allow popups to export the blueprint.");
+      return;
+    }
+
+    const { dimensions: dim, foundation, wallLayers: layers, wallPreset, structuralConfig, floors } = state;
+
+    // Generate BOM Cut List HTML
+    let bomRows = bomListWithIds.map(item => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold; color: #ff8c00;">${item.idNum}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.nominal}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${item.length.toFixed(2)}m</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${item.count}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-weight: bold;">${(item.length * item.count).toFixed(2)}m</td>
+      </tr>
+    `).join('');
+
+    // Generate Floor sections
+    let floorsHtml = floors.map(floor => {
+      const floorJoists = framing.filter(m => m.floorId === floor.id && m.type === 'joist' && !m.id.startsWith('roof-'));
+
+      // Joists table
+      let joistsTableHtml = '';
+      if (floorJoists.length > 0) {
+        const groups: any = {};
+        floorJoists.forEach(j => {
+          const len = Math.max(j.size[0], j.size[1], j.size[2]);
+          const nominal = j.id.includes('rim') ? 'Rim Joist' : 'Floor Joist';
+          const key = `${nominal}-${len.toFixed(2)}`;
+          if (!groups[key]) groups[key] = { nominal, length: len, count: 0 };
+          groups[key].count++;
+        });
+
+        joistsTableHtml = `
+          <h4 style="margin-top: 12px; margin-bottom: 6px; color: #555;">Floor Joists List (${floorJoists.length} pcs)</h4>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
+            <thead>
+              <tr style="background-color: #f2f2f2; font-size: 11px;">
+                <th style="padding: 6px; text-align: left; border: 1px solid #ddd;">Role</th>
+                <th style="padding: 6px; text-align: right; border: 1px solid #ddd;">Length</th>
+                <th style="padding: 6px; text-align: right; border: 1px solid #ddd;">Quantity</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${Object.values(groups).map((g: any) => `
+                <tr style="border-bottom: 1px solid #eee; font-size: 11px;">
+                  <td style="padding: 6px; border: 1px solid #ddd;">${g.nominal}</td>
+                  <td style="padding: 6px; text-align: right; border: 1px solid #ddd;">${g.length.toFixed(2)}m</td>
+                  <td style="padding: 6px; text-align: right; border: 1px solid #ddd;">${g.count}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+
+      // Outer walls section
+      let outerWallsHtml = floor.walls.map(wall => {
+        const wallMembers = framing.filter(m => m.floorId === floor.id && m.wallId === wall.id);
+        const wallLength = Math.sqrt(
+          Math.pow(wall.end[0] - wall.start[0], 2) + Math.pow(wall.end[1] - wall.start[1], 2)
+        );
+        const wallTitle = wall.id === 'wall-front' ? 'Front Wall' :
+                          wall.id === 'wall-back' ? 'Back Wall' :
+                          wall.id === 'wall-left' ? 'Left Wall' :
+                          wall.id === 'wall-right' ? 'Right Wall' : wall.id;
+
+        const svgStr = generateWallSVGString(wall, wallMembers, dim.heightPerFloor, getCutIdentifier, floor.level, true, `print-svg-${wall.id}`);
+
+        // Wall members table
+        const wallGroups: any = {};
+        wallMembers.forEach(m => {
+          const details = getWallMemberDetails(m, wall);
+          const key = `${details.nominal}-${details.role}-${details.len.toFixed(3)}`;
+          if (!wallGroups[key]) {
+            wallGroups[key] = {
+              nominal: details.nominal,
+              role: details.role,
+              length: details.len,
+              count: 0
+            };
+          }
+          wallGroups[key].count++;
+        });
+
+        return `
+          <div style="page-break-inside: avoid; border: 1px solid #ccc; padding: 16px; border-radius: 8px; margin-bottom: 24px; background-color: #fafafa;">
+            <h4 style="margin-top: 0; color: #ff8c00; font-size: 14px; text-transform: uppercase;">${wallTitle} (Length: ${wallLength.toFixed(2)}m)</h4>
+            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+              <div style="flex: 1; min-width: 320px;">
+                ${svgStr}
+              </div>
+              <div style="flex: 1; min-width: 280px;">
+                <h5 style="margin-top: 0; margin-bottom: 8px; color: #666;">Member Cut List</h5>
+                <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                  <thead>
+                    <tr style="background-color: #e6e6e6;">
+                      <th style="padding: 6px; border: 1px solid #ddd;">ID</th>
+                      <th style="padding: 6px; border: 1px solid #ddd;">Nominal</th>
+                      <th style="padding: 6px; border: 1px solid #ddd;">Role</th>
+                      <th style="padding: 6px; text-align: right; border: 1px solid #ddd;">Len</th>
+                      <th style="padding: 6px; text-align: right; border: 1px solid #ddd;">Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${Object.values(wallGroups).map((g: any) => {
+                      const idNum = getCutIdentifier(g.nominal, g.length);
+                      return `
+                        <tr style="border-bottom: 1px solid #eee;">
+                          <td style="padding: 6px; font-weight: bold; color: #ff8c00; border: 1px solid #ddd;">${idNum}</td>
+                          <td style="padding: 6px; border: 1px solid #ddd;">${g.nominal}</td>
+                          <td style="padding: 6px; font-weight: 600; border: 1px solid #ddd;">${g.role}</td>
+                          <td style="padding: 6px; text-align: right; border: 1px solid #ddd;">${g.length.toFixed(2)}m</td>
+                          <td style="padding: 6px; text-align: right; border: 1px solid #ddd;">${g.count}</td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Partition walls section
+      let partitionWallsHtml = (floor.internalWalls || []).map((wall, idx) => {
+        const wallMembers = framing.filter(m => m.floorId === floor.id && m.wallId === wall.id);
+        const wallLength = Math.sqrt(
+          Math.pow(wall.end[0] - wall.start[0], 2) + Math.pow(wall.end[1] - wall.start[1], 2)
+        );
+        const wallTitle = `Partition Wall ${idx + 1}`;
+
+        const svgStr = generateWallSVGString(wall, wallMembers, dim.heightPerFloor, getCutIdentifier, floor.level, true, `print-svg-${wall.id}`);
+
+        // Wall members table
+        const wallGroups: any = {};
+        wallMembers.forEach(m => {
+          const details = getWallMemberDetails(m, wall);
+          const key = `${details.nominal}-${details.role}-${details.len.toFixed(3)}`;
+          if (!wallGroups[key]) {
+            wallGroups[key] = {
+              nominal: details.nominal,
+              role: details.role,
+              length: details.len,
+              count: 0
+            };
+          }
+          wallGroups[key].count++;
+        });
+
+        return `
+          <div style="page-break-inside: avoid; border: 1px solid #ccc; padding: 16px; border-radius: 8px; margin-bottom: 24px; background-color: #fafafa;">
+            <h4 style="margin-top: 0; color: #ff8c00; font-size: 14px; text-transform: uppercase;">${wallTitle} (Length: ${wallLength.toFixed(2)}m)</h4>
+            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+              <div style="flex: 1; min-width: 320px;">
+                ${svgStr}
+              </div>
+              <div style="flex: 1; min-width: 280px;">
+                <h5 style="margin-top: 0; margin-bottom: 8px; color: #666;">Member Cut List</h5>
+                <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                  <thead>
+                    <tr style="background-color: #e6e6e6;">
+                      <th style="padding: 6px; border: 1px solid #ddd;">ID</th>
+                      <th style="padding: 6px; border: 1px solid #ddd;">Nominal</th>
+                      <th style="padding: 6px; border: 1px solid #ddd;">Role</th>
+                      <th style="padding: 6px; text-align: right; border: 1px solid #ddd;">Len</th>
+                      <th style="padding: 6px; text-align: right; border: 1px solid #ddd;">Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${Object.values(wallGroups).map((g: any) => {
+                      const idNum = getCutIdentifier(g.nominal, g.length);
+                      return `
+                        <tr style="border-bottom: 1px solid #eee;">
+                          <td style="padding: 6px; font-weight: bold; color: #ff8c00; border: 1px solid #ddd;">${idNum}</td>
+                          <td style="padding: 6px; border: 1px solid #ddd;">${g.nominal}</td>
+                          <td style="padding: 6px; font-weight: 600; border: 1px solid #ddd;">${g.role}</td>
+                          <td style="padding: 6px; text-align: right; border: 1px solid #ddd;">${g.length.toFixed(2)}m</td>
+                          <td style="padding: 6px; text-align: right; border: 1px solid #ddd;">${g.count}</td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <div style="border-top: 2px solid #333; padding-top: 16px; margin-top: 24px;">
+          <h3 style="color: #222; text-transform: uppercase; margin-bottom: 8px; font-size: 16px;">
+            ${floor.level === 0 ? 'Ground Floor Details' : `Floor ${floor.level + 1} Details`}
+          </h3>
+          ${joistsTableHtml}
+          
+          <h4 style="margin-top: 16px; margin-bottom: 12px; color: #444;">Outer Walls</h4>
+          ${outerWallsHtml}
+          
+          ${(floor.internalWalls || []).length > 0 ? `
+            <h4 style="margin-top: 16px; margin-bottom: 12px; color: #444;">Internal Partition Walls</h4>
+            ${partitionWallsHtml}
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+
+    // Generate Roof HTML
+    const roofMembers = framing.filter(m => !m.floorId && !m.wallId);
+    let roofHtml = '';
+    if (roofMembers.length > 0) {
+      const roofGroups: any = {};
+      roofMembers.forEach(r => {
+        const len = Math.max(r.size[0], r.size[1], r.size[2]);
+        let typeLabel = r.id.includes('ridge') ? 'Ridge Beam' : (r.id.includes('collar') ? 'Collar Tie' : 'Rafter');
+        const key = `2x6 (40x140mm)-${typeLabel}-${len.toFixed(2)}`;
+        if (!roofGroups[key]) roofGroups[key] = { nominal: '2x6 (40x140mm)', role: typeLabel, length: len, count: 0 };
+        roofGroups[key].count++;
+      });
+
+      roofHtml = `
+        <div style="border-top: 2px solid #333; padding-top: 16px; margin-top: 24px; page-break-inside: avoid;">
+          <h3 style="color: #222; text-transform: uppercase; margin-bottom: 8px; font-size: 16px;">Roof Framing Details</h3>
+          <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
+            <thead>
+              <tr style="background-color: #f2f2f2; font-size: 11px;">
+                <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Role</th>
+                <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Nominal Dimension</th>
+                <th style="padding: 8px; text-align: right; border: 1px solid #ddd;">Length</th>
+                <th style="padding: 8px; text-align: right; border: 1px solid #ddd;">Quantity</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${Object.values(roofGroups).map((g: any) => `
+                <tr style="border-bottom: 1px solid #eee; font-size: 11px;">
+                  <td style="padding: 8px; font-weight: 600; border: 1px solid #ddd;">${g.role}</td>
+                  <td style="padding: 8px; border: 1px solid #ddd;">${g.nominal}</td>
+                  <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">${g.length.toFixed(2)}m</td>
+                  <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">${g.count}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Woodii Construction Blueprint: Project Take-off</title>
+        <meta charset="utf-8" />
+        <style>
+          body {
+            font-family: 'Inter', system-ui, sans-serif;
+            color: #333;
+            background-color: #fff;
+            padding: 40px;
+            max-width: 1000px;
+            margin: 0 auto;
+            line-height: 1.5;
+          }
+          h1, h2, h3, h4, h5 {
+            font-family: system-ui, sans-serif;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+            margin-bottom: 20px;
+          }
+          th {
+            background-color: #f2f2f2;
+            color: #333;
+            font-weight: bold;
+            padding: 8px;
+            text-align: left;
+            border: 1px solid #ddd;
+          }
+          td {
+            padding: 8px;
+            border: 1px solid #ddd;
+          }
+          @media print {
+            body {
+              padding: 20px;
+            }
+            .no-print {
+              display: none !important;
+            }
+            .page-break {
+              page-break-after: always;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="no-print" style="background-color: #f5f5f5; border: 1px solid #ff8c00; border-radius: 8px; padding: 16px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h3 style="margin: 0; color: #ff8c00; text-transform: uppercase; font-size: 14px;">Print / PDF Blueprint Export</h3>
+            <p style="margin: 4px 0 0 0; font-size: 12px; color: #666;">Choose "Save as PDF" in your print options destination to export a digital PDF blueprint.</p>
+          </div>
+          <button onclick="window.print()" style="padding: 10px 20px; background-color: #ff8c00; color: #000; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">
+            🖨️ Print Blueprint / Save PDF
+          </button>
+        </div>
+
+        <div style="border-bottom: 3px solid #ff8c00; padding-bottom: 10px; margin-bottom: 20px;">
+          <h1 style="margin: 0; font-size: 26px; color: #111;">WOODII CONSTRUCTION BLUEPRINT</h1>
+          <span style="font-size: 12px; color: #777;">Generated on: ${new Date().toLocaleDateString()}</span>
+        </div>
+
+        <section style="margin-bottom: 30px;">
+          <h2 style="color: #222; text-transform: uppercase; font-size: 18px;">Global Building Specifications</h2>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; background-color: #fafafa; padding: 16px; border-radius: 8px; border: 1px solid #eaeaea; font-size: 13px;">
+            <div><strong>Dimensions (Width x Depth):</strong> ${dim.width.toFixed(2)}m x ${dim.depth.toFixed(2)}m</div>
+            <div><strong>Wall Height (per floor):</strong> ${dim.heightPerFloor.toFixed(2)}m</div>
+            <div><strong>Foundation Type:</strong> ${foundation.type === 'slab' ? 'Concrete Slab' : 'Ground Screws Grid'}</div>
+            <div><strong>Wall Layers Preset:</strong> ${wallPreset.toUpperCase().replace('_', ' ')}</div>
+            <div><strong>Wall Thickness (Total):</strong> ${(layers.outer + layers.middle + layers.inner).toFixed(3)}m</div>
+            <div><strong>Cladding (Outer/Middle/Inner):</strong> ${layers.outer * 1000}mm / ${layers.middle * 1000}mm / ${layers.inner * 1000}mm</div>
+            <div><strong>Wall Staggered Blocking:</strong> ${structuralConfig.wallBlocking ? 'ENABLED' : 'DISABLED'}</div>
+            <div><strong>Floor Joist Blocking:</strong> ${structuralConfig.floorBlocking ? 'ENABLED' : 'DISABLED'}</div>
+          </div>
+        </section>
+
+        <section style="margin-bottom: 30px;">
+          <h2 style="color: #222; text-transform: uppercase; font-size: 18px;">Consolidated Bill of Materials (BOM)</h2>
+          <p style="font-size: 12px; color: #666; margin-top: -8px;">Total lumber take-offs needed for construction.</p>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Lumber Type</th>
+                <th>Cut Length</th>
+                <th>Quantity</th>
+                <th>Total Length</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${bomRows}
+            </tbody>
+          </table>
+          <div style="background-color: #fafafa; padding: 12px; border-radius: 6px; border: 1px solid #eaeaea; font-size: 12px;">
+            <strong>Hardware & Count Summaries:</strong> Foundation: ${foundation.type === 'slab' ? 'Concrete Slab' : 'Ground Screws'} | Screws count: ${framing.filter(m => m.type === 'screw').length} screws | Doors: ${floors.reduce((acc, f) => acc + (f.walls.reduce((a, w) => a + w.subObjects.filter(o => o.type === 'door').length, 0)) + (f.internalWalls || []).reduce((a, w) => a + w.subObjects.filter(o => o.type === 'door').length, 0), 0)} | Windows: ${floors.reduce((acc, f) => acc + f.walls.reduce((a, w) => a + w.subObjects.filter(o => o.type === 'window').length, 0), 0)}
+          </div>
+        </section>
+
+        <div class="page-break"></div>
+
+        <section style="margin-bottom: 30px;">
+          <h2 style="color: #222; text-transform: uppercase; font-size: 18px; margin-bottom: 16px;">Detailed Wall Assembly Blueprint</h2>
+          ${floorsHtml}
+        </section>
+
+        ${roofHtml}
+
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
   let doorCount = 0;
   let windowCount = 0;
   let openingCount = 0;
@@ -259,7 +632,7 @@ export default function Sidebar() {
       flexDirection: 'column',
       fontFamily: 'Inter, system-ui, sans-serif',
       boxShadow: '-2px 0 12px rgba(0,0,0,0.3)',
-      overflowY: 'auto',
+      overflow: 'hidden',
       zIndex: 10
     }}>
       {/* Header */}
@@ -301,7 +674,7 @@ export default function Sidebar() {
       </div>
 
       {activeTab === 'projects' && (
-        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, overflowY: 'auto' }}>
           {/* Project Persistence */}
           <section style={{ backgroundColor: '#1e1e1e', padding: '16px', borderRadius: '8px', border: '1px solid #333' }}>
             <h3 style={{ margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>
@@ -381,7 +754,7 @@ export default function Sidebar() {
       )}
 
       {activeTab === 'global' && (
-        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, overflowY: 'auto' }}>
           {/* Footprint dimensions */}
           <section>
             <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>Dimensions</h3>
@@ -669,7 +1042,7 @@ export default function Sidebar() {
       )}
 
       {activeTab === 'selection' && (
-        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, overflowY: 'auto' }}>
           {/* Selected Details Panel */}
           <section style={{
             backgroundColor: '#1e1e1e',
@@ -1232,6 +1605,25 @@ export default function Sidebar() {
             <h3 style={{ margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>Roof Config</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Roof Type</label>
+                <select
+                  value={roof.type || 'saddle'}
+                  onChange={(e) => handleRoofChange('type', e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    backgroundColor: '#1a1a1a',
+                    border: '1px solid #444',
+                    borderRadius: '6px',
+                    color: '#e0e0e0',
+                    fontSize: '12px'
+                  }}
+                >
+                  <option value="saddle">Saddle Roof</option>
+                  <option value="flat">Flat Roof</option>
+                </select>
+              </div>
+              <div>
                 <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Inclination (°)</label>
                 <input
                   type="number"
@@ -1316,14 +1708,46 @@ export default function Sidebar() {
       )}
 
       {activeTab === 'bom' && (
-        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, overflowY: 'auto' }}>
 
 
           {/* Material Take-off List */}
           <section style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>
-              Material Take-off (BOM)
-            </h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>
+                Material Take-off (BOM)
+              </h3>
+              <button
+                onClick={handleExportBlueprint}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#e07b00';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(255, 140, 0, 0.5)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#ff8c00';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(255, 140, 0, 0.3)';
+                }}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#ff8c00',
+                  color: '#000',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: '11px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.02em',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(255, 140, 0, 0.3)'
+                }}
+              >
+                🖨️ Export PDF / Print
+              </button>
+            </div>
 
             {/* View Mode Toggle */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
@@ -1819,23 +2243,300 @@ const getWallMemberDetails = (member: FramingMember, wall: any) => {
   };
 };
 
+const generateWallSVGString = (
+  wall: any,
+  wallMembers: FramingMember[],
+  heightPerFloor: number,
+  getCutIdentifier: any,
+  floorLevel: number,
+  isPrintVariant: boolean,
+  svgId: string
+) => {
+  const dx = wall.end[0] - wall.start[0];
+  const dz = wall.end[1] - wall.start[1];
+  const wallLength = Math.sqrt(dx * dx + dz * dz);
+  const margin = 0.35;
+  const svgWidth = wallLength + margin * 2;
+  const svgHeight = heightPerFloor + margin * 2;
+
+  // Decide colors based on print variant
+  const bgColor = isPrintVariant ? '#ffffff' : '#151515';
+  const gridLineColor = isPrintVariant ? '#f0f0f0' : '#222';
+  const outlineStroke = isPrintVariant ? '#555' : '#333';
+  const labelFillColor = isPrintVariant ? 'rgba(235, 140, 0, 0.8)' : 'rgba(255, 140, 0, 0.6)';
+  const dimColor = isPrintVariant ? '#333' : '#888';
+
+  let openingsStr = '';
+  (wall.subObjects || []).forEach((obj: any) => {
+    const w = obj.width;
+    const h = obj.height;
+    const x = obj.position - w / 2;
+    const y = heightPerFloor - (obj.elevation !== undefined ? obj.elevation : (obj.type === 'window' ? 0.9 : 0)) - h;
+    openingsStr += `
+      <g>
+        <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="rgba(255, 140, 0, 0.04)" stroke="rgba(255, 140, 0, 0.25)" stroke-width="0.012" stroke-dasharray="0.04, 0.02" />
+        <text x="${obj.position}" y="${y + h / 2}" font-size="0.09" fill="${labelFillColor}" font-weight="bold" text-anchor="middle" dominant-baseline="middle" style="font-family: sans-serif; pointer-events: none; user-select: none;">${obj.type.toUpperCase()}</text>
+      </g>
+    `;
+  });
+
+  let membersStr = '';
+  wallMembers.forEach((m) => {
+    const details = getWallMemberDetails(m, wall);
+    const [, py] = m.position;
+    const localY = py - floorLevel * heightPerFloor;
+    
+    let x = 0;
+    let y = 0;
+    let w = 0;
+    let h = 0;
+
+    const isVertical = details.isVertical;
+    const [mW, mH, mD] = m.size;
+
+    if (isVertical) {
+      const thickness = Math.min(mW, mD);
+      w = thickness;
+      h = details.len;
+      x = details.localX - w / 2;
+      y = heightPerFloor - localY - h / 2;
+    } else {
+      w = details.len;
+      h = mH;
+      x = details.localX - w / 2;
+      y = heightPerFloor - localY - h / 2;
+    }
+
+    const idNum = getCutIdentifier(details.nominal, details.len);
+
+    let fillColor = isPrintVariant ? '#fdf6eb' : '#d2b48c'; // default tan wood
+    let strokeColor = isPrintVariant ? '#c5b095' : '#b58c54';
+    if (details.role.includes('Plate')) {
+      fillColor = isPrintVariant ? '#d2b48c' : '#b58c54'; // darker wood for plates
+      strokeColor = isPrintVariant ? '#b58c54' : '#94703d';
+    } else if (details.role.includes('Corner')) {
+      fillColor = isPrintVariant ? '#c5a072' : '#c5a072';
+      strokeColor = isPrintVariant ? '#a38053' : '#a38053';
+    } else if (details.role.includes('Header') || details.role.includes('Sill')) {
+      fillColor = isPrintVariant ? '#a28860' : '#a28860';
+      strokeColor = isPrintVariant ? '#7f6640' : '#7f6640';
+    } else if (details.role.includes('Blocking') || m.id.includes('blocking') || m.id.includes('nogging')) {
+      fillColor = isPrintVariant ? '#caa376' : '#caa376';
+      strokeColor = isPrintVariant ? '#a88359' : '#a88359';
+    }
+
+    let textStr = '';
+    if (idNum) {
+      const rotStr = isVertical && h > 0.4 ? `transform="rotate(-90, ${x + w / 2}, ${y + h / 2})"` : '';
+      const textFill = isPrintVariant ? '#df7300' : '#ff8c00';
+      const strokeVal = isPrintVariant ? '#ffffff' : '#151515';
+      textStr = `<text x="${x + w / 2}" y="${y + h / 2}" font-size="${isVertical ? '0.08' : '0.07'}" fill="${textFill}" font-weight="900" text-anchor="middle" dominant-baseline="middle" paint-order="stroke fill" stroke="${strokeVal}" stroke-width="0.015" ${rotStr} style="font-family: monospace; pointer-events: none; user-select: none;">${idNum}</text>`;
+    }
+
+    membersStr += `
+      <g>
+        <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="0.008" rx="0.005" ry="0.005" />
+        ${textStr}
+      </g>
+    `;
+  });
+
+  // Find all vertical members and get their unique localX positions, plus wall start and end
+  const verticalXs: number[] = [0];
+  wallMembers.forEach((m) => {
+    const details = getWallMemberDetails(m, wall);
+    if (details.isVertical) {
+      const roundedX = Math.round(details.localX * 1000) / 1000;
+      if (!verticalXs.includes(roundedX)) {
+        verticalXs.push(roundedX);
+      }
+    }
+  });
+
+  const roundedLength = Math.round(wallLength * 1000) / 1000;
+  if (!verticalXs.includes(roundedLength)) {
+    verticalXs.push(roundedLength);
+  }
+
+  // Sort ascending
+  verticalXs.sort((a, b) => a - b);
+
+  let topDimensionChainStr = '';
+  if (verticalXs.length > 1) {
+    const chainY = -0.15; // horizontal line position above the wall
+    
+    // Draw the main horizontal line spanning from start to end
+    topDimensionChainStr += `
+      <line x1="${verticalXs[0]}" y1="${chainY}" x2="${verticalXs[verticalXs.length - 1]}" y2="${chainY}" stroke="${dimColor}" stroke-width="0.004" />
+    `;
+    
+    // Draw vertical tick marks and text for each interval
+    verticalXs.forEach((x, idx) => {
+      // Tick mark
+      topDimensionChainStr += `
+        <line x1="${x}" y1="${chainY - 0.04}" x2="${x}" y2="${chainY + 0.04}" stroke="${dimColor}" stroke-width="0.004" />
+      `;
+      
+      if (idx < verticalXs.length - 1) {
+        const nextX = verticalXs[idx + 1];
+        const dist = nextX - x;
+        
+        if (dist >= 0.05) { // Only show label for spacing >= 5cm to prevent overlapping
+          const label = dist < 1.0 
+            ? `${Math.round(dist * 100)} cm` 
+            : `${dist.toFixed(2)} m`;
+            
+          const midX = (x + nextX) / 2;
+          const labelFontSize = dist < 0.25 ? '0.05' : '0.065';
+          
+          topDimensionChainStr += `
+            <g>
+              <rect x="${midX - (dist < 0.25 ? 0.08 : 0.15)}" y="${chainY - 0.05}" width="${dist < 0.25 ? 0.16 : 0.3}" height="0.1" fill="${bgColor}" />
+              <text x="${midX}" y="${chainY}" font-size="${labelFontSize}" fill="${dimColor}" font-weight="600" text-anchor="middle" dominant-baseline="middle" style="font-family: sans-serif; pointer-events: none; user-select: none;">${label}</text>
+            </g>
+          `;
+        }
+      }
+    });
+  }
+
+  return `
+    <svg id="${svgId}" width="100%" viewBox="${-margin} ${-margin} ${svgWidth} ${svgHeight}" style="background-color: ${bgColor}; border-radius: 4px; border: 1px solid ${isPrintVariant ? '#ccc' : '#222'}; display: block; max-height: 420px;">
+      <defs>
+        <pattern id="grid-${svgId}" width="0.2" height="0.2" patternUnits="userSpaceOnUse">
+          <path d="M 0.2 0 L 0 0 0 0.2" fill="none" stroke="${gridLineColor}" stroke-width="0.005" />
+        </pattern>
+      </defs>
+      <rect x="${-margin}" y="${-margin}" width="${svgWidth}" height="${svgHeight}" fill="url(#grid-${svgId})" />
+      <rect x="0" y="0" width="${wallLength}" height="${heightPerFloor}" fill="rgba(0,0,0,0.01)" stroke="${outlineStroke}" stroke-width="0.01" />
+      ${openingsStr}
+      ${membersStr}
+      ${topDimensionChainStr}
+      <!-- Bottom Dimension -->
+      <g>
+        <line x1="0" y1="${heightPerFloor + 0.18}" x2="${wallLength}" y2="${heightPerFloor + 0.18}" stroke="${dimColor}" stroke-width="0.005" />
+        <line x1="0" y1="${heightPerFloor + 0.12}" x2="0" y2="${heightPerFloor + 0.24}" stroke="${dimColor}" stroke-width="0.005" />
+        <line x1="${wallLength}" y1="${heightPerFloor + 0.12}" x2="${wallLength}" y2="${heightPerFloor + 0.24}" stroke="${dimColor}" stroke-width="0.005" />
+        <rect x="${wallLength / 2 - 0.25}" y="${heightPerFloor + 0.1}" width="0.5" height="0.16" fill="${bgColor}" />
+        <text x="${wallLength / 2}" y="${heightPerFloor + 0.21}" font-size="0.09" fill="${dimColor}" font-weight="600" text-anchor="middle" dominant-baseline="middle" style="font-family: sans-serif;">${wallLength.toFixed(2)}m</text>
+      </g>
+      <!-- Left Dimension -->
+      <g>
+        <line x1="-0.18" y1="0" x2="-0.18" y2="${heightPerFloor}" stroke="${dimColor}" stroke-width="0.005" />
+        <line x1="-0.24" y1="0" x2="-0.12" y2="0" stroke="${dimColor}" stroke-width="0.005" />
+        <line x1="-0.24" y1="${heightPerFloor}" x2="-0.12" y2="${heightPerFloor}" stroke="${dimColor}" stroke-width="0.005" />
+        <rect x="-0.28" y="${heightPerFloor / 2 - 0.25}" width="0.2" height="0.5" fill="${bgColor}" />
+        <text x="-0.2" y="${heightPerFloor / 2}" font-size="0.09" fill="${dimColor}" font-weight="600" text-anchor="middle" transform="rotate(-90, -0.2, ${heightPerFloor / 2})" style="font-family: sans-serif;">${heightPerFloor.toFixed(2)}m</text>
+      </g>
+    </svg>
+  `;
+};
+
 function WallDrawing({ wall, wallMembers, heightPerFloor, getCutIdentifier }: {
   wall: any;
   wallMembers: FramingMember[];
   heightPerFloor: number;
   getCutIdentifier: (nominal: string, length: number) => string;
 }) {
+  const [isMaximized, setIsMaximized] = useState(false);
+
   const dx = wall.end[0] - wall.start[0];
   const dz = wall.end[1] - wall.start[1];
   const wallLength = Math.sqrt(dx * dx + dz * dz);
+  const margin = 0.35;
+  const svgWidth = wallLength + margin * 2;
+  const svgHeight = heightPerFloor + margin * 2;
 
   const floorPart = wallMembers[0]?.floorId?.split('-')?.[1];
   const floorLevel = floorPart ? parseInt(floorPart) : 0;
 
-  // We add some margins around the drawing for dimension lines
-  const margin = 0.35;
-  const svgWidth = wallLength + margin * 2;
-  const svgHeight = heightPerFloor + margin * 2;
+  useEffect(() => {
+    if (!isMaximized) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsMaximized(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isMaximized]);
+
+  const downloadSVG = (svgId: string, filename: string) => {
+    const svgElement = document.getElementById(svgId);
+    if (!svgElement) return;
+    const serializer = new XMLSerializer();
+    let source = serializer.serializeToString(svgElement);
+    if (!source.match(/^<svg[^>]+xmlns="http:\/\/www\.w3\.org\/2000\/svg"/)) {
+      source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+    if (!source.match(/^<svg[^>]+xmlns:xlink="http:\/\/www\.w3\.org\/1999\/xlink"/)) {
+      source = source.replace(/^<svg/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+    }
+    const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(source);
+    const downloadLink = document.createElement("a");
+    downloadLink.href = url;
+    downloadLink.download = filename;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+  };
+
+  const downloadPNG = (svgId: string, filename: string) => {
+    const svgElement = document.getElementById(svgId);
+    if (!svgElement) return;
+    const serializer = new XMLSerializer();
+    let source = serializer.serializeToString(svgElement);
+    if (!source.match(/^<svg[^>]+xmlns="http:\/\/www\.w3\.org\/2000\/svg"/)) {
+      source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+    if (!source.match(/^<svg[^>]+xmlns:xlink="http:\/\/www\.w3\.org\/1999\/xlink"/)) {
+      source = source.replace(/^<svg/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+    }
+    const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
+    const URL = window.URL || window.webkitURL || window;
+    const blobURL = URL.createObjectURL(svgBlob);
+    
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      const scale = 2; // High-res export
+      canvas.width = svgWidth * 150 * scale; 
+      canvas.height = svgHeight * 150 * scale; 
+      
+      const context = canvas.getContext('2d');
+      if (context) {
+        context.fillStyle = '#151515';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        
+        const pngURL = canvas.toDataURL('image/png');
+        const downloadLink = document.createElement('a');
+        downloadLink.href = pngURL;
+        downloadLink.download = filename;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+      }
+      URL.revokeObjectURL(blobURL);
+    };
+    image.src = blobURL;
+  };
+
+  const svgId = `sidebar-svg-${wall.id}`;
+  const maxSvgId = `max-svg-${wall.id}`;
+
+  const renderSvgContent = (isMaximizedVersion: boolean) => {
+    const svgIdToUse = isMaximizedVersion ? maxSvgId : svgId;
+    const svgStr = generateWallSVGString(wall, wallMembers, heightPerFloor, getCutIdentifier, floorLevel, false, svgIdToUse);
+    return (
+      <div 
+        id={isMaximizedVersion ? `max-container-${wall.id}` : `sidebar-container-${wall.id}`}
+        onClick={isMaximizedVersion ? undefined : () => setIsMaximized(true)}
+        style={{ cursor: isMaximizedVersion ? 'default' : 'zoom-in', width: '100%' }}
+        dangerouslySetInnerHTML={{ __html: svgStr }}
+      />
+    );
+  };
 
   return (
     <div style={{
@@ -1851,197 +2552,107 @@ function WallDrawing({ wall, wallMembers, heightPerFloor, getCutIdentifier }: {
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: '10px', color: '#ff8c00', fontWeight: 600, textTransform: 'uppercase' }}>Wall Framing Plan Drawing</span>
-        <span style={{ fontSize: '9px', color: '#666' }}>Scale Auto</span>
+        <span style={{ fontSize: '9px', color: '#888' }}>Click to enlarge / download</span>
       </div>
 
-      <svg
-        width="100%"
-        viewBox={`${-margin} ${-margin} ${svgWidth} ${svgHeight}`}
-        style={{
-          backgroundColor: '#151515',
-          borderRadius: '4px',
-          border: '1px solid #222',
-          display: 'block'
-        }}
-      >
-        {/* Grid Background */}
-        <defs>
-          <pattern id={`drawing-grid-${wall.id}`} width="0.2" height="0.2" patternUnits="userSpaceOnUse">
-            <path d="M 0.2 0 L 0 0 0 0.2" fill="none" stroke="#222" strokeWidth="0.005" />
-          </pattern>
-        </defs>
-        <rect x={-margin} y={-margin} width={svgWidth} height={svgHeight} fill={`url(#drawing-grid-${wall.id})`} />
+      {renderSvgContent(false)}
 
-        {/* Wall Frame Outline */}
-        <rect x={0} y={0} width={wallLength} height={heightPerFloor} fill="rgba(255,255,255,0.02)" stroke="#333" strokeWidth="0.01" />
-
-        {/* Render Openings */}
-        {(wall.subObjects || []).map((obj: any) => {
-          const w = obj.width;
-          const h = obj.height;
-          const x = obj.position - w / 2;
-          const y = heightPerFloor - (obj.elevation !== undefined ? obj.elevation : (obj.type === 'window' ? 0.9 : 0)) - h;
-          return (
-            <g key={obj.id}>
-              <rect
-                x={x}
-                y={y}
-                width={w}
-                height={h}
-                fill="rgba(255, 140, 0, 0.04)"
-                stroke="rgba(255, 140, 0, 0.25)"
-                strokeWidth="0.012"
-                strokeDasharray="0.04, 0.02"
-              />
-              <text
-                x={obj.position}
-                y={y + h / 2}
-                fontSize="0.09"
-                fill="rgba(255, 140, 0, 0.6)"
-                fontWeight="bold"
-                textAnchor="middle"
-                alignmentBaseline="middle"
-                style={{ pointerEvents: 'none', userSelect: 'none', fontFamily: 'sans-serif' }}
-              >
-                {obj.type.toUpperCase()}
-              </text>
-            </g>
-          );
-        })}
-
-        {/* Render Framing Members */}
-        {wallMembers.map((m) => {
-          const details = getWallMemberDetails(m, wall);
-          const [, py] = m.position;
-          const localY = py - floorLevel * heightPerFloor;
-          
-          let x = 0;
-          let y = 0;
-          let w = 0;
-          let h = 0;
-
-          const isVertical = details.isVertical;
-          const [mW, mH, mD] = m.size;
-
-          if (isVertical) {
-            // vertical stud
-            const thickness = Math.min(mW, mD);
-            w = thickness;
-            h = details.len;
-            x = details.localX - w / 2;
-            y = heightPerFloor - localY - h / 2;
-          } else {
-            // horizontal plate/blocking/header
-            w = details.len;
-            h = mH; // vertical thickness
-            x = details.localX - w / 2;
-            y = heightPerFloor - localY - h / 2;
-          }
-
-          // Fetch cut identifier (#1, #2, etc.)
-          const idNum = getCutIdentifier(details.nominal, details.len);
-
-          // Stylize based on role
-          let fillColor = '#d2b48c'; // default tan wood
-          let strokeColor = '#b58c54';
-          if (details.role.includes('Plate')) {
-            fillColor = '#b58c54'; // darker wood for plates
-            strokeColor = '#94703d';
-          } else if (details.role.includes('Corner')) {
-            fillColor = '#c5a072';
-            strokeColor = '#a38053';
-          } else if (details.role.includes('Header') || details.role.includes('Sill')) {
-            fillColor = '#a28860';
-            strokeColor = '#7f6640';
-          } else if (details.role.includes('Blocking') || m.id.includes('blocking') || m.id.includes('nogging')) {
-            fillColor = '#caa376';
-            strokeColor = '#a88359';
-          }
-
-          return (
-            <g key={m.id}>
-              <rect
-                x={x}
-                y={y}
-                width={w}
-                height={h}
-                fill={fillColor}
-                stroke={strokeColor}
-                strokeWidth="0.008"
-                rx={0.005}
-                ry={0.005}
-              />
-              {idNum && (
-                <text
-                  x={x + w / 2}
-                  y={y + h / 2}
-                  fontSize={isVertical ? "0.08" : "0.07"}
-                  fill="#ff8c00"
-                  fontWeight="900"
-                  textAnchor="middle"
-                  alignmentBaseline="middle"
-                  paintOrder="stroke fill"
-                  stroke="#151515"
-                  strokeWidth="0.015"
+      {isMaximized && (
+        <div
+          onClick={() => setIsMaximized(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+            cursor: 'zoom-out'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: '#1e1e1e',
+              border: '1px solid #ff8c00',
+              borderRadius: '12px',
+              padding: '24px',
+              width: '90%',
+              maxWidth: '800px',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+              cursor: 'default'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, color: '#ff8c00', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Framing Plan: {wall.id.startsWith('internal-') ? `Partition Wall` : wall.id}
+              </h3>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => downloadSVG(maxSvgId, `framing-plan-${wall.id}.svg`)}
                   style={{
-                    fontFamily: 'monospace',
-                    pointerEvents: 'none',
-                    userSelect: 'none'
+                    padding: '6px 12px',
+                    backgroundColor: '#ff8c00',
+                    color: '#000',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer'
                   }}
-                  transform={isVertical && h > 0.4 ? `rotate(-90, ${x + w / 2}, ${y + h / 2})` : undefined}
                 >
-                  {idNum}
-                </text>
-              )}
-            </g>
-          );
-        })}
+                  Download SVG
+                </button>
+                <button
+                  onClick={() => downloadPNG(maxSvgId, `framing-plan-${wall.id}.png`)}
+                  style={{
+                    padding: '6px 12px',
+                    backgroundColor: '#ff8c00',
+                    color: '#000',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Download PNG
+                </button>
+                <button
+                  onClick={() => setIsMaximized(false)}
+                  style={{
+                    padding: '6px 12px',
+                    backgroundColor: '#444',
+                    color: '#eee',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
 
-        {/* Dimension Lines - Horizontal (Bottom) */}
-        <g>
-          {/* Main Line */}
-          <line x1={0} y1={heightPerFloor + 0.18} x2={wallLength} y2={heightPerFloor + 0.18} stroke="#888" strokeWidth="0.005" />
-          {/* Ticks */}
-          <line x1={0} y1={heightPerFloor + 0.12} x2={0} y2={heightPerFloor + 0.24} stroke="#888" strokeWidth="0.005" />
-          <line x1={wallLength} y1={heightPerFloor + 0.12} x2={wallLength} y2={heightPerFloor + 0.24} stroke="#888" strokeWidth="0.005" />
-          {/* Text */}
-          <rect x={wallLength / 2 - 0.25} y={heightPerFloor + 0.1} width={0.5} height={0.16} fill="#151515" />
-          <text
-            x={wallLength / 2}
-            y={heightPerFloor + 0.21}
-            fontSize="0.09"
-            fill="#aaa"
-            fontWeight="600"
-            textAnchor="middle"
-            style={{ fontFamily: 'sans-serif' }}
-          >
-            {wallLength.toFixed(2)}m
-          </text>
-        </g>
+            <div style={{ backgroundColor: '#151515', borderRadius: '8px', padding: '16px', border: '1px solid #333', display: 'flex', justifyContent: 'center' }}>
+              {renderSvgContent(true)}
+            </div>
 
-        {/* Dimension Lines - Vertical (Left) */}
-        <g>
-          {/* Main Line */}
-          <line x1={-0.18} y1={0} x2={-0.18} y2={heightPerFloor} stroke="#888" strokeWidth="0.005" />
-          {/* Ticks */}
-          <line x1={-0.24} y1={0} x2={-0.12} y2={0} stroke="#888" strokeWidth="0.005" />
-          <line x1={-0.24} y1={heightPerFloor} x2={-0.12} y2={heightPerFloor} stroke="#888" strokeWidth="0.005" />
-          {/* Text */}
-          <rect x={-0.28} y={heightPerFloor / 2 - 0.25} width={0.2} height={0.5} fill="#151515" />
-          <text
-            x={-0.2}
-            y={heightPerFloor / 2}
-            fontSize="0.09"
-            fill="#aaa"
-            fontWeight="600"
-            textAnchor="middle"
-            transform={`rotate(-90, -0.2, ${heightPerFloor / 2})`}
-            style={{ fontFamily: 'sans-serif' }}
-          >
-            {heightPerFloor.toFixed(2)}m
-          </text>
-        </g>
-      </svg>
+            <div style={{ fontSize: '10px', color: '#666', fontStyle: 'italic' }}>
+              Click anywhere outside or hit ESC to close. Downloaded SVG files are vector scale plans.
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

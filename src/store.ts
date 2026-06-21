@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { ProjectState, BuildingType, Dimensions, RoofConfig, FoundationConfig, WallLayersConfig, StructuralConfig, UIState, Floor, Wall, InternalWall, SubObject } from './types';
 
 // Helper to create default walls based on dimensions
@@ -174,8 +175,10 @@ const INITIAL_PROJECT_STATE = {
   }
 };
 
-export const useProjectStore = create<ProjectStore>((set) => ({
-  ...INITIAL_PROJECT_STATE,
+export const useProjectStore = create<ProjectStore>()(
+  persist(
+    (set) => ({
+      ...INITIAL_PROJECT_STATE,
   floors: [
     {
       id: 'floor-0',
@@ -823,22 +826,29 @@ export const useProjectStore = create<ProjectStore>((set) => ({
           finalEndZ = targetEndZ;
         }
       } else if (draggedType === 'internalWallRotate') {
-        const [initialAngle] = state.uiState.dragOffset || [0, 0];
         const cx = (foundWall.start[0] + foundWall.end[0]) / 2;
         const cz = (foundWall.start[1] + foundWall.end[1]) / 2;
-        const currentAngle = Math.atan2(z - cz, x - cx);
-        const angleDelta = currentAngle - initialAngle;
-        
         const dx = foundWall.end[0] - foundWall.start[0];
         const dz = foundWall.end[1] - foundWall.start[1];
         const wallAngle = Math.atan2(dz, dx);
-        const newAngle = wallAngle + angleDelta;
+
+        const lastMouseAngle = state.uiState.dragOffset ? state.uiState.dragOffset[0] : Math.atan2(z - cz, x - cx);
+        const lastUnsnappedWallAngle = (state.uiState.dragOffset && state.uiState.dragOffset[2] !== undefined)
+          ? state.uiState.dragOffset[2]
+          : wallAngle;
+
+        const currentAngle = Math.atan2(z - cz, x - cx);
+        const angleDelta = currentAngle - lastMouseAngle;
+        const newUnsnappedAngle = lastUnsnappedWallAngle + angleDelta;
+        
+        const snapAngle = Math.PI / 8; // 22.5 degrees in radians
+        const snappedAngle = Math.round(newUnsnappedAngle / snapAngle) * snapAngle;
         const length = Math.sqrt(dx * dx + dz * dz);
 
-        const targetStartX = cx - (length / 2) * Math.cos(newAngle);
-        const targetStartZ = cz - (length / 2) * Math.sin(newAngle);
-        const targetEndX = cx + (length / 2) * Math.cos(newAngle);
-        const targetEndZ = cz + (length / 2) * Math.sin(newAngle);
+        const targetStartX = cx - (length / 2) * Math.cos(snappedAngle);
+        const targetStartZ = cz - (length / 2) * Math.sin(snappedAngle);
+        const targetEndX = cx + (length / 2) * Math.cos(snappedAngle);
+        const targetEndZ = cz + (length / 2) * Math.sin(snappedAngle);
 
         const clampX = (val: number) => Math.max(minX, Math.min(maxX, val));
         const clampZ = (val: number) => Math.max(minZ, Math.min(maxZ, val));
@@ -885,11 +895,28 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       const newCz = (finalStartZ + finalEndZ) / 2;
       const updatedAngle = Math.atan2(z - newCz, x - newCx);
 
+      // Determine the unsnapped angle value for dragOffset
+      let finalUnsnappedAngle = 0;
+      if (draggedType === 'internalWallRotate') {
+        const dx = finalEndX - finalStartX;
+        const dz = finalEndZ - finalStartZ;
+        const wallAngle = Math.atan2(dz, dx);
+        const lastMouseAngle = state.uiState.dragOffset ? state.uiState.dragOffset[0] : Math.atan2(z - newCz, x - newCx);
+        const lastUnsnappedWallAngle = (state.uiState.dragOffset && state.uiState.dragOffset[2] !== undefined)
+          ? state.uiState.dragOffset[2]
+          : wallAngle;
+        const currentAngle = Math.atan2(z - newCz, x - newCx);
+        const angleDelta = currentAngle - lastMouseAngle;
+        finalUnsnappedAngle = lastUnsnappedWallAngle + angleDelta;
+      }
+
       return { 
         floors: updatedFloors,
         uiState: {
           ...state.uiState,
-          dragOffset: draggedType === 'internalWallRotate' ? [updatedAngle, 0] : state.uiState.dragOffset
+          dragOffset: draggedType === 'internalWallRotate'
+            ? [updatedAngle, state.uiState.dragOffset ? state.uiState.dragOffset[1] : 0, finalUnsnappedAngle]
+            : state.uiState.dragOffset
         }
       };
     }
@@ -1517,4 +1544,16 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       }
     ]
   }))
+}), {
+  name: 'woodii-project-storage',
+  partialize: (state) => ({
+    buildingType: state.buildingType,
+    dimensions: state.dimensions,
+    roof: state.roof,
+    foundation: state.foundation,
+    wallLayers: state.wallLayers,
+    wallPreset: state.wallPreset,
+    structuralConfig: state.structuralConfig,
+    floors: state.floors,
+  }),
 }));

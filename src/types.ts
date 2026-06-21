@@ -73,7 +73,7 @@ export interface UIState {
   isDragging: boolean;
   draggedId: string | null;
   draggedType: 'subObject' | 'wallHandle' | 'internalWall' | 'internalWallStart' | 'internalWallEnd' | 'internalWallRotate' | null;
-  dragOffset?: [number, number] | null;
+  dragOffset?: [number, number, number?] | null;
   viewMode?: '3D' | 'topDown' | 'walking';
 }
 

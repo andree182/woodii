@@ -1059,7 +1059,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
       if (i > 0 && i < rafterCount - 1) {
         const collarY = topElevation + 0.6; // 60cm above wall plates (shorter and higher up)
         const yOffset = collarY - topElevation;
-        const maxWidth = 2 * (halfGableWidth - yOffset / Math.tan(angleRad) - rafterHeight / Math.cos(angleRad));
+        const maxWidth = 2 * (halfGableWidth - yOffset / Math.tan(angleRad));
         const collarWidth = Math.max(0.5, maxWidth - 0.02);
 
         members.push({
