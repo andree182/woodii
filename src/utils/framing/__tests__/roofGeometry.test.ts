@@ -358,6 +358,40 @@ describe('Roof Geometry Verification Tests', () => {
       );
       expect(leftTop.x).toBeCloseTo(leftBottom.x, 4);
     });
+
+    it('5) internal rafters are spaced exactly 0.625m for OSB sheeting', () => {
+      const state = makeMockState('saddle', 20);
+      state.topCover.sheetingMaterial = 'osb_1250';
+      const members = generateRoof(state);
+      const rightRafters = members.filter(m => m.id.includes('roof-rafter-saddle-right'));
+
+      rightRafters.sort((a, b) => a.position[2] - b.position[2]);
+
+      const depth = state.dimensions.depth;
+      const internalRafters = rightRafters.filter(r => r.position[2] > -depth / 2 + 0.05 && r.position[2] < depth / 2 - 0.05);
+
+      for (let i = 1; i < internalRafters.length; i++) {
+        const dist = internalRafters[i].position[2] - internalRafters[i - 1].position[2];
+        expect(dist).toBeCloseTo(0.625, 4);
+      }
+    });
+
+    it('6) internal rafters are spaced exactly 0.61m if plywood sheeting is chosen', () => {
+      const state = makeMockState('saddle', 20);
+      state.topCover.sheetingMaterial = 'plywood';
+      const members = generateRoof(state);
+      const rightRafters = members.filter(m => m.id.includes('roof-rafter-saddle-right'));
+
+      rightRafters.sort((a, b) => a.position[2] - b.position[2]);
+
+      const depth = state.dimensions.depth;
+      const internalRafters = rightRafters.filter(r => r.position[2] > -depth / 2 + 0.05 && r.position[2] < depth / 2 - 0.05);
+
+      for (let i = 1; i < internalRafters.length; i++) {
+        const dist = internalRafters[i].position[2] - internalRafters[i - 1].position[2];
+        expect(dist).toBeCloseTo(0.61, 4);
+      }
+    });
   });
 
   describe('Solid Roof Block Vertices', () => {
@@ -391,7 +425,7 @@ describe('Roof Geometry Verification Tests', () => {
       }
     }
 
-    it('5) has vertical ends (plumb cuts) for right slope / flat roof solid block', () => {
+    it('7) has vertical ends (plumb cuts) for right slope / flat roof solid block', () => {
       const angleRad = (15 * Math.PI) / 180;
       const L = 4.0;
       const H = 0.3;
@@ -409,7 +443,7 @@ describe('Roof Geometry Verification Tests', () => {
       expect(topRight.x).toBeCloseTo(bottomRight.x, 4);
     });
 
-    it('6) has vertical ends (plumb cuts) for left slope solid block', () => {
+    it('8) has vertical ends (plumb cuts) for left slope solid block', () => {
       const angleRad = (20 * Math.PI) / 180;
       const L = 3.5;
       const H = 0.4;

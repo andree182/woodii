@@ -15,9 +15,19 @@ export function generateRoof(state: ProjectState): FramingMember[] {
   const roofCovers = state.roofCovers || { gableMaterial: 'none', gableThickness: 0.02 };
   const gableThickness = roofCovers.gableMaterial !== 'none' ? roofCovers.gableThickness : 0;
 
-  const rafterSpacing = 0.6;
   const rafterThickness = 0.04;
   const rafterHeight = 0.14; // 2x6 rafters
+
+  // Determine spacing based on sheeting material
+  let spacing = 0.625;
+  const sheeting = state.topCover?.sheetingMaterial || 'osb_1250';
+  if (sheeting === 'osb_1250' || sheeting === 'osb_625') {
+    spacing = 0.625;
+  } else if (sheeting === 'plywood') {
+    spacing = 0.61; // 610mm
+  } else {
+    spacing = 0.625;
+  }
 
   // Rafter Z-positions: fly rafters at ends, wall rafters, and internal rafters
   const backFlyZ = -depth / 2 - overhang + gableThickness + rafterThickness / 2;
@@ -25,12 +35,18 @@ export function generateRoof(state: ProjectState): FramingMember[] {
   const frontWallZ = depth / 2;
   const frontFlyZ = depth / 2 + overhang - gableThickness - rafterThickness / 2;
 
-  const internalSpan = depth;
-  const numInternalSpaces = Math.max(1, Math.ceil(internalSpan / rafterSpacing));
-  const internalSpacing = internalSpan / numInternalSpaces;
+  // OSB boards start at the back edge of the roof sheathing
+  const sheathingStartZ = -depth / 2 - overhang;
   const internalZs: number[] = [];
-  for (let i = 1; i < numInternalSpaces; i++) {
-    internalZs.push(-depth / 2 + i * internalSpacing);
+  
+  // Place internal rafters at exact spacing intervals starting from sheathingStartZ
+  // They must be strictly inside the walls to not conflict with wall rafters
+  let currentZ = sheathingStartZ + spacing;
+  while (currentZ < depth / 2 - 0.05) {
+    if (currentZ > -depth / 2 + 0.05) {
+      internalZs.push(currentZ);
+    }
+    currentZ += spacing;
   }
 
   const rafterZs: number[] = [];

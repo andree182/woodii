@@ -130,14 +130,23 @@ export default function RoofRenderer() {
 
     const color = topCover.material === 'shingles' ? '#3e3e3e' : (topCover.material === 'tiles' ? '#b24a2c' : '#7f8c8d');
     const sheetT = topCover.sheetingMaterial !== 'none' ? topCover.sheetingThickness : 0;
-    const yOffset = 0.14 + sheetT + 0.005; // directly on top of sheathing
+    const baseHeight = mode === 'sheathing' ? (0.14 + sheetT) : (0.14 + thickness);
+    const yOffset = baseHeight + 0.0025; // sit exactly on top of the base (rafters+sheathing or solid block)
 
     for (let r = 0; r < numRows; r++) {
       const rx = slopeL - r * expH - expH / 2; // start from eave going up to ridge
       const tiltAngle = topCover.material === 'plates' ? 0 : -0.04; // slant shingle to simulate overlap
 
       for (let c = 0; c < numCols; c++) {
-        const rz = -slopeW / 2 + c * expW + expW / 2;
+        // Start and end positions of this column along Z (building depth)
+        const zStart = -slopeW / 2 + c * expW;
+        const zEnd = Math.min(slopeW / 2, zStart + expW);
+        const wZ = zEnd - zStart;
+
+        // Skip if width is too small (e.g. less than 1cm)
+        if (wZ <= 0.01) continue;
+
+        const rz = zStart + wZ / 2;
 
         shingles.push(
           <mesh
@@ -147,7 +156,7 @@ export default function RoofRenderer() {
             castShadow
             receiveShadow
           >
-            <boxGeometry args={[sH, 0.005, expW - 0.002]} />
+            <boxGeometry args={[sH, 0.005, wZ - 0.002]} />
             <meshStandardMaterial color={color} roughness={0.6} metalness={topCover.material === 'plates' ? 0.8 : 0.1} />
           </mesh>
         );
