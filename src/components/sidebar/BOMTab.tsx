@@ -232,6 +232,30 @@ export default function BOMTab() {
                 <span style="font-size: 10px; font-weight: normal; color: #666;">(${roof.rowsCount} rows × ${roof.piecesPerRow} pcs)</span>
               </td>
             </tr>
+            ${state.roofCovers && state.roofCovers.soffitMaterial !== 'none' ? `
+            <tr>
+              <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Roof Soffit (Bottom Cover)</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">Wooden Soffit (${state.roofCovers.soffitWidth * 1000}x${state.roofCovers.soffitThickness * 1000}mm)</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${totals.soffitMeters.toFixed(1)} m</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">${totals.soffitPieces} boards (4.0m)</td>
+            </tr>
+            ` : ''}
+            ${state.roofCovers && state.roofCovers.fasciaMaterial !== 'none' ? `
+            <tr>
+              <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Eaves Fascia Board</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">Wooden Fascia (${state.roofCovers.fasciaHeight * 1000}x${state.roofCovers.fasciaThickness * 1000}mm)</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${totals.fasciaMeters.toFixed(1)} m</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">${totals.fasciaPieces} boards (4.0m)</td>
+            </tr>
+            ` : ''}
+            ${state.roofCovers && state.roofCovers.gableMaterial !== 'none' ? `
+            <tr>
+              <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Gable Wind Board</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">Wooden Wind Board (${state.roofCovers.gableHeight * 1000}x${state.roofCovers.gableThickness * 1000}mm)</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${totals.gableMeters.toFixed(1)} m</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">${totals.gablePieces} boards (4.0m)</td>
+            </tr>
+            ` : ''}
           </tbody>
         </table>
       `;

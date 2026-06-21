@@ -13,6 +13,7 @@ export default function WallRenderer({ wall, level, floorId }: { wall: Wall; lev
   const uiState = useProjectStore((state) => state.uiState);
   const wallLayers = useProjectStore((state) => state.wallLayers);
   const wallPreset = useProjectStore((state) => state.wallPreset);
+  const wallCovers = useProjectStore((state) => state.wallCovers);
   const selectObject = useProjectStore((state) => state.selectObject);
   const startDragging = useProjectStore((state) => state.startDragging);
   const stopDragging = useProjectStore((state) => state.stopDragging);
@@ -29,6 +30,7 @@ export default function WallRenderer({ wall, level, floorId }: { wall: Wall; lev
   const dx = endX - startX;
   const dz = endZ - startZ;
   const length = Math.sqrt(dx * dx + dz * dz);
+  if (length < 0.05) return null;
   const rotationY = -Math.atan2(dz, dx);
 
   const wallId = `${floorId}-${wall.id}`;
@@ -110,6 +112,69 @@ export default function WallRenderer({ wall, level, floorId }: { wall: Wall; lev
     return shape;
   };
 
+  const createPanelShape = (xStart: number, xEnd: number, yStart: number, yHeight: number, yHeightOffset = 0) => {
+    const shape = new Shape();
+    
+    const getWallHeightAtX = (x: number) => {
+      const base = customHeight + yHeightOffset;
+      if (isTopFloor && isFlatRoof && (wall.id === 'wall-front' || wall.id === 'wall-back')) {
+        const slopeStartHeight = isBack ? hRight : hLeft;
+        const slopeEndHeight = isBack ? hLeft : hRight;
+        return slopeStartHeight + (x / length) * (slopeEndHeight - slopeStartHeight) + yHeightOffset;
+      }
+      return base;
+    };
+
+    const yTopStart = Math.min(yStart + yHeight, getWallHeightAtX(xStart));
+    const yTopEnd = Math.min(yStart + yHeight, getWallHeightAtX(xEnd));
+
+    if (yTopStart <= yStart && yTopEnd <= yStart) {
+      return null;
+    }
+
+    shape.moveTo(xStart, yStart);
+    shape.lineTo(xEnd, yStart);
+    shape.lineTo(xEnd, yTopEnd);
+    shape.lineTo(xStart, yTopStart);
+    shape.closePath();
+
+    wall.subObjects.forEach((obj) => {
+      const isDoor = obj.type === 'door';
+      const defaultElevation = isDoor ? 0 : (obj.type === 'window' ? 0.9 : 0);
+      const currentElevation = obj.elevation !== undefined ? obj.elevation : defaultElevation;
+      
+      let localWallHeightAtObj = customHeight;
+      if (isTopFloor && isFlatRoof && (wall.id === 'wall-front' || wall.id === 'wall-back')) {
+        localWallHeightAtObj = isBack
+          ? hRight + obj.position * Math.tan(angleRad)
+          : hLeft - obj.position * Math.tan(angleRad);
+      }
+      const clampedElevation = Math.max(0, Math.min(Math.max(0, localWallHeightAtObj - obj.height), currentElevation));
+
+      const objLeft = obj.position - obj.width / 2;
+      const objRight = obj.position + obj.width / 2;
+      const objBottom = clampedElevation;
+      const objTop = clampedElevation + obj.height;
+
+      const intersectLeft = Math.max(xStart, objLeft);
+      const intersectRight = Math.min(xEnd, objRight);
+      const intersectBottom = Math.max(yStart, objBottom);
+      const intersectTop = Math.min(yTopStart, objTop);
+
+      if (intersectRight > intersectLeft && intersectTop > intersectBottom) {
+        const holePath = new Path();
+        holePath.moveTo(intersectLeft, intersectBottom);
+        holePath.lineTo(intersectLeft, intersectTop);
+        holePath.lineTo(intersectRight, intersectTop);
+        holePath.lineTo(intersectRight, intersectBottom);
+        holePath.closePath();
+        shape.holes.push(holePath);
+      }
+    });
+
+    return shape;
+  };
+
   const wallCenterX = (startX + endX) / 2;
   const wallCenterZ = (startZ + endZ) / 2;
 
@@ -152,9 +217,85 @@ export default function WallRenderer({ wall, level, floorId }: { wall: Wall; lev
           }
         ];
 
+        const renderSheathingPanels = (layer: any, config: any) => {
+          const panels: React.ReactNode[] = [];
+          const isPanel = config.material.startsWith('osb') || config.material === 'plasterboard';
+          const sheetW = config.length; 
+          const sheetH = config.width;   
+          const gap = isPanel ? 0.003 : (config.gap || 0.01);
+
+          const yHeightOffset = layer.suffix === 'outer' && !isTopFloor ? 0.14 : 0;
+          const maxH = customHeight + yHeightOffset;
+          const numRows = Math.ceil(maxH / (sheetH + gap));
+
+          const layerColor = isSelected ? '#ff8c00' : (
+            config.material === 'plasterboard' ? '#eeeeee' : (
+              config.material.startsWith('osb') ? '#bfa37a' : '#8b5a2b'
+            )
+          );
+
+          const xMin = layer.xStartOffset;
+          const xMax = length - layer.xEndOffset;
+
+          for (let r = 0; r < numRows; r++) {
+            const py = r * (sheetH + gap);
+            if (py >= maxH - 0.01) break;
+            const ph = Math.min(sheetH, maxH - py);
+
+            const xOffset = isPanel ? (r % 2) * (sheetW / 2) : 0;
+            let px = xMin - xOffset;
+            let panelIdx = 0;
+
+            while (px < xMax) {
+              const xStart = Math.max(xMin, px);
+              const xEnd = Math.min(xMax, px + sheetW);
+
+              if (xEnd - xStart > 0.02) {
+                const shape = createPanelShape(xStart, xEnd, py, ph, yHeightOffset);
+                if (shape) {
+                  panels.push(
+                    <mesh
+                      key={`${wallId}-${layer.suffix}-${r}-${panelIdx}`}
+                      position={[0, 0, layer.zOffset]}
+                      castShadow
+                      receiveShadow
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        selectObject(wallId, 'wall');
+                      }}
+                    >
+                      <extrudeGeometry args={[shape, { depth: layer.depth, bevelEnabled: false }]} />
+                      <meshStandardMaterial
+                        color={layerColor}
+                        roughness={0.7}
+                        transparent={false}
+                        opacity={1.0}
+                        depthWrite={true}
+                      />
+                    </mesh>
+                  );
+                }
+              }
+              px += sheetW + gap;
+              panelIdx++;
+            }
+          }
+          return panels;
+        };
+
         return (
           <group>
             {layers.filter(layer => layer.depth > 0.001).map((layer) => {
+              if (mode === 'sheathing') {
+                if (layer.suffix === 'outer' && wallCovers.external.material !== 'none') {
+                  return <group key={layer.suffix}>{renderSheathingPanels(layer, wallCovers.external)}</group>;
+                }
+                if (layer.suffix === 'inner' && wallCovers.internal.material !== 'none') {
+                  return <group key={layer.suffix}>{renderSheathingPanels(layer, wallCovers.internal)}</group>;
+                }
+                return null;
+              }
+
               const layerColor = isSelected ? '#ff8c00' : layer.color;
               const layerOpacity = isSelected ? Math.min(1.0, layer.opacity + 0.15) : layer.opacity;
               const isTransparent = mode === 'seeThrough';

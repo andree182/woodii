@@ -17,6 +17,8 @@ export default function SelectionTab() {
     addInternalWall,
     setRoofConfig,
     setTopCoverConfig,
+    roofCovers,
+    setRoofCoversConfig,
     setFloorOpening,
     resetProject,
   } = useProjectStore();
@@ -863,6 +865,129 @@ export default function SelectionTab() {
                   />
                 </div>
               )}
+            </div>
+
+            {/* Roof Covers Configuration (Soffit, Fascia, Gable) */}
+            <div style={{ borderTop: '1px solid #333', paddingTop: '12px', marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <h4 style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#ff8c00', textTransform: 'uppercase' }}>Roof Soffit & Trims</h4>
+              
+              {/* Soffit */}
+              <div style={{ borderBottom: '1px solid #222', paddingBottom: '8px' }}>
+                <label style={{ display: 'block', fontSize: '11px', color: '#eee', fontWeight: 600, marginBottom: '4px' }}>Overhang Soffit (Bottom Cover)</label>
+                <select
+                  value={roofCovers.soffitMaterial}
+                  onChange={(e) => setRoofCoversConfig({ soffitMaterial: e.target.value as any })}
+                  style={{ width: '100%', padding: '8px', backgroundColor: '#1a1a1a', border: '1px solid #444', borderRadius: '6px', color: '#e0e0e0', fontSize: '12px', marginBottom: '6px' }}
+                >
+                  <option value="decking">Classic Wooden Decking</option>
+                  <option value="plasterboard">Plasterboard / Gypsum Board</option>
+                  <option value="none">None (Open Eaves)</option>
+                </select>
+                {roofCovers.soffitMaterial !== 'none' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Thickness (m)</label>
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0.005"
+                        value={roofCovers.soffitThickness}
+                        onChange={(e) => setRoofCoversConfig({ soffitThickness: parseFloat(e.target.value) || 0.015 })}
+                        style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Board Width (m)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.05"
+                        value={roofCovers.soffitWidth}
+                        onChange={(e) => setRoofCoversConfig({ soffitWidth: parseFloat(e.target.value) || 0.12 })}
+                        style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Fascia */}
+              <div style={{ borderBottom: '1px solid #222', paddingBottom: '8px' }}>
+                <label style={{ display: 'block', fontSize: '11px', color: '#eee', fontWeight: 600, marginBottom: '4px' }}>Eaves Fascia Board</label>
+                <select
+                  value={roofCovers.fasciaMaterial}
+                  onChange={(e) => setRoofCoversConfig({ fasciaMaterial: e.target.value as any })}
+                  style={{ width: '100%', padding: '8px', backgroundColor: '#1a1a1a', border: '1px solid #444', borderRadius: '6px', color: '#e0e0e0', fontSize: '12px', marginBottom: '6px' }}
+                >
+                  <option value="wood_board">Wooden Board</option>
+                  <option value="none">None</option>
+                </select>
+                {roofCovers.fasciaMaterial !== 'none' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Thickness (m)</label>
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0.01"
+                        value={roofCovers.fasciaThickness}
+                        onChange={(e) => setRoofCoversConfig({ fasciaThickness: parseFloat(e.target.value) || 0.02 })}
+                        style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Board Height (m)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.05"
+                        value={roofCovers.fasciaHeight}
+                        onChange={(e) => setRoofCoversConfig({ fasciaHeight: parseFloat(e.target.value) || 0.18 })}
+                        style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Gable Board */}
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#eee', fontWeight: 600, marginBottom: '4px' }}>Gable Wind Board</label>
+                <select
+                  value={roofCovers.gableMaterial}
+                  onChange={(e) => setRoofCoversConfig({ gableMaterial: e.target.value as any })}
+                  style={{ width: '100%', padding: '8px', backgroundColor: '#1a1a1a', border: '1px solid #444', borderRadius: '6px', color: '#e0e0e0', fontSize: '12px', marginBottom: '6px' }}
+                >
+                  <option value="wood_board">Wooden Board</option>
+                  <option value="none">None</option>
+                </select>
+                {roofCovers.gableMaterial !== 'none' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Thickness (m)</label>
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0.01"
+                        value={roofCovers.gableThickness}
+                        onChange={(e) => setRoofCoversConfig({ gableThickness: parseFloat(e.target.value) || 0.02 })}
+                        style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10px', color: '#888', marginBottom: '2px' }}>Board Height (m)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.05"
+                        value={roofCovers.gableHeight}
+                        onChange={(e) => setRoofCoversConfig({ gableHeight: parseFloat(e.target.value) || 0.18 })}
+                        style={{ width: '100%', padding: '6px', backgroundColor: '#121212', border: '1px solid #333', borderRadius: '4px', color: '#e0e0e0', fontSize: '11px' }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </section>

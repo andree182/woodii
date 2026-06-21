@@ -68,7 +68,7 @@ export interface RoofConfig {
 export interface UIState {
   selectedId: string | null; // Selected wall or sub-object id
   selectedType: 'wall' | 'subObject' | 'roof' | 'floor' | null;
-  seeThroughMode: 'solid' | 'seeThrough' | 'studsOnly';
+  seeThroughMode: 'solid' | 'seeThrough' | 'sheathing' | 'studsOnly';
   currentFloorView: number; // Active floor to edit / view (-1 for all)
   isDragging: boolean;
   draggedId: string | null;
@@ -117,6 +117,20 @@ export interface WallCoversConfig {
   internal: SideCoverConfig;
 }
 
+export interface RoofCoversConfig {
+  soffitMaterial: 'decking' | 'plasterboard' | 'none';
+  soffitThickness: number;
+  soffitWidth: number;
+  
+  fasciaMaterial: 'wood_board' | 'none';
+  fasciaThickness: number;
+  fasciaHeight: number;
+  
+  gableMaterial: 'wood_board' | 'none';
+  gableThickness: number;
+  gableHeight: number;
+}
+
 export interface ProjectState {
   buildingType: BuildingType;
   dimensions: Dimensions;
@@ -128,6 +142,7 @@ export interface ProjectState {
   structuralConfig: StructuralConfig;
   topCover: TopCoverConfig;
   wallCovers: WallCoversConfig;
+  roofCovers: RoofCoversConfig;
   uiState: UIState;
 }
 

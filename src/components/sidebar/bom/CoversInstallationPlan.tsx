@@ -52,6 +52,20 @@ export default function CoversInstallationPlan() {
         <div>
           <strong>Roof Top Cover:</strong> {topCover.material === 'shingles' ? `${totals.roofShinglesCount} Shingles` : topCover.material === 'tiles' ? `${totals.roofTilesCount} Tiles` : `${totals.roofPlatesCount} Aluminum Plates`} ({topCover.width}x{topCover.height}m)
         </div>
+
+        {state.roofCovers && (state.roofCovers.soffitMaterial !== 'none' || state.roofCovers.fasciaMaterial !== 'none' || state.roofCovers.gableMaterial !== 'none') && (
+          <div style={{ borderTop: '1px solid #2a2a2a', marginTop: '4px', paddingTop: '4px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            {state.roofCovers.soffitMaterial !== 'none' && (
+              <div><strong>Roof Soffit:</strong> {totals.soffitPieces} boards of length 4.0m ({totals.soffitMeters.toFixed(1)}m total)</div>
+            )}
+            {state.roofCovers.fasciaMaterial !== 'none' && (
+              <div><strong>Eaves Fascia:</strong> {totals.fasciaPieces} boards of length 4.0m ({totals.fasciaMeters.toFixed(1)}m total)</div>
+            )}
+            {state.roofCovers.gableMaterial !== 'none' && (
+              <div><strong>Gable Wind Board:</strong> {totals.gablePieces} boards of length 4.0m ({totals.gableMeters.toFixed(1)}m total)</div>
+            )}
+          </div>
+        )}
         
         {wallCovers.external.material !== 'none' && (
           <div style={{ borderTop: '1px solid #2a2a2a', marginTop: '4px', paddingTop: '4px' }}>
@@ -97,6 +111,22 @@ export default function CoversInstallationPlan() {
               <div>• Row structure: <strong style={{ color: '#fff' }}>{roof.rowsCount} rows</strong>, laying <strong style={{ color: '#fff' }}>{roof.piecesPerRow} pieces</strong> horizontally per row.</div>
             </div>
           </div>
+          {state.roofCovers && (state.roofCovers.soffitMaterial !== 'none' || state.roofCovers.fasciaMaterial !== 'none' || state.roofCovers.gableMaterial !== 'none') && (
+            <div style={{ borderTop: '1px solid #2a2a2a', paddingTop: '6px' }}>
+              <strong>Overhangs & Trims Installation:</strong>
+              <div style={{ color: '#aaa', marginTop: '2px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                {state.roofCovers.soffitMaterial !== 'none' && (
+                  <div>• Soffit bottom covers: Lay {totals.soffitPieces} boards ({totals.soffitMeters.toFixed(1)}m total) under eaves & gable overhangs.</div>
+                )}
+                {state.roofCovers.fasciaMaterial !== 'none' && (
+                  <div>• Eaves Fascia boards: Install {totals.fasciaPieces} boards ({totals.fasciaMeters.toFixed(1)}m total) along the eave ends of rafters.</div>
+                )}
+                {state.roofCovers.gableMaterial !== 'none' && (
+                  <div>• Gable Wind boards: Install {totals.gablePieces} boards ({totals.gableMeters.toFixed(1)}m total) along the slanted pitch gable edges.</div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

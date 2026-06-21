@@ -12,37 +12,45 @@ export function generateRoof(state: ProjectState): FramingMember[] {
   const angleRad = (inclination * Math.PI) / 180;
 
   const wallThickness = state.floors[0]?.walls[0]?.thickness || 0.15;
+  const roofCovers = state.roofCovers || { gableMaterial: 'none', gableThickness: 0.02 };
+  const gableThickness = roofCovers.gableMaterial !== 'none' ? roofCovers.gableThickness : 0;
+
+  const rafterSpacing = 0.6;
+  const rafterThickness = 0.04;
+  const rafterHeight = 0.14; // 2x6 rafters
+
+  // Rafter Z-positions: fly rafters at ends, wall rafters, and internal rafters
+  const backFlyZ = -depth / 2 - overhang + gableThickness + rafterThickness / 2;
+  const backWallZ = -depth / 2;
+  const frontWallZ = depth / 2;
+  const frontFlyZ = depth / 2 + overhang - gableThickness - rafterThickness / 2;
+
+  const internalSpan = depth;
+  const numInternalSpaces = Math.max(1, Math.ceil(internalSpan / rafterSpacing));
+  const internalSpacing = internalSpan / numInternalSpaces;
+  const internalZs: number[] = [];
+  for (let i = 1; i < numInternalSpaces; i++) {
+    internalZs.push(-depth / 2 + i * internalSpacing);
+  }
+
+  const rafterZs = [backFlyZ, backWallZ, ...internalZs, frontWallZ, frontFlyZ];
+
   if (type === 'flat') {
     // Flat roof joists/rafters sloping along inclination
-    const rafterSpacing = 0.6;
-    const rafterThickness = 0.04;
-    const rafterHeight = 0.14; // 2x6 rafters
     const rafterLength = (width + wallThickness) / Math.cos(angleRad) + overhang * 2;
 
-    const spanningWidth = depth + overhang * 2 - rafterThickness;
-    const numSpaces = Math.max(1, Math.ceil(spanningWidth / rafterSpacing));
-    const actualSpacing = spanningWidth / numSpaces;
-    const rafterCount = numSpaces + 1;
-
-    for (let i = 0; i < rafterCount; i++) {
-      const rz = -depth / 2 - overhang + rafterThickness / 2 + i * actualSpacing;
-      // Slanted rafters centered at X=0, sloping around Z-axis rotation
+    rafterZs.forEach((rz, idx) => {
       members.push({
-        id: `roof-rafter-flat-${i}`,
+        id: `roof-rafter-flat-${idx}`,
         type: 'rafter',
         position: [0, topElevation + (width / 2 + wallThickness / 2) * Math.tan(angleRad) + (rafterHeight / 2) / Math.cos(angleRad), rz],
         rotation: [0, 0, -angleRad],
         size: [rafterLength, rafterHeight, rafterThickness],
       });
-    }
+    });
   } else {
-    // Saddle roof trusses running along depth Z
-    const rafterSpacing = 0.6;
-    const rafterThickness = 0.04;
-    const rafterHeight = 0.14; // 2x6 rafters
-    
-    // Ridge beam along the Z center line
-    const ridgeLength = depth + overhang * 2;
+    // Ridge beam along the Z center line (terminating inside gable boards)
+    const ridgeLength = depth + overhang * 2 - gableThickness * 2;
     const ridgeHeight = 0.18; // 2x8 ridge beam
     const halfGableWidth = width / 2 + wallThickness * 0.5;
     
@@ -57,19 +65,12 @@ export function generateRoof(state: ProjectState): FramingMember[] {
     const halfRoofWidth = halfGableWidth + overhang;
     const slopeLength = halfRoofWidth / Math.cos(angleRad);
 
-    const spanningWidth = depth + overhang * 2 - rafterThickness;
-    const numSpaces = Math.max(1, Math.ceil(spanningWidth / rafterSpacing));
-    const actualSpacing = spanningWidth / numSpaces;
-    const rafterCount = numSpaces + 1;
-
-    for (let i = 0; i < rafterCount; i++) {
-      const rz = -depth / 2 - overhang + rafterThickness / 2 + i * actualSpacing;
-
+    rafterZs.forEach((rz, idx) => {
       // Right slope rafters
       const rightX = halfRoofWidth / 2;
       const rightY = topElevation + (halfGableWidth - halfRoofWidth / 2) * Math.tan(angleRad) + (rafterHeight / 2) / Math.cos(angleRad);
       members.push({
-        id: `roof-rafter-saddle-right-${i}`,
+        id: `roof-rafter-saddle-right-${idx}`,
         type: 'rafter',
         position: [rightX, rightY, rz],
         rotation: [0, 0, -angleRad],
@@ -80,29 +81,30 @@ export function generateRoof(state: ProjectState): FramingMember[] {
       const leftX = -halfRoofWidth / 2;
       const leftY = topElevation + (halfGableWidth - halfRoofWidth / 2) * Math.tan(angleRad) + (rafterHeight / 2) / Math.cos(angleRad);
       members.push({
-        id: `roof-rafter-saddle-left-${i}`,
+        id: `roof-rafter-saddle-left-${idx}`,
         type: 'rafter',
         position: [leftX, leftY, rz],
         rotation: [0, 0, angleRad],
         size: [slopeLength, rafterHeight, rafterThickness],
       });
 
-      // Collar tie (horizontal bracing joist across rafters)
-      if (i > 0 && i < rafterCount - 1) {
+      // Collar ties on internal rafters only
+      const isInternal = rz > backWallZ && rz < frontWallZ;
+      if (isInternal) {
         const collarY = topElevation + 0.6; // 60cm above wall plates
         const yOffset = collarY - topElevation;
         const maxWidth = 2 * (halfGableWidth - yOffset / Math.tan(angleRad));
         const collarWidth = Math.max(0.5, maxWidth - 0.02);
 
         members.push({
-          id: `roof-collar-tie-${i}`,
+          id: `roof-collar-tie-${idx}`,
           type: 'joist',
           position: [0, collarY, rz + rafterThickness],
           rotation: [0, 0, 0],
           size: [collarWidth, 0.09, rafterThickness],
         });
       }
-    }
+    });
   }
 
   return members;

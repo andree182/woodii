@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ProjectState, BuildingType, Dimensions, RoofConfig, FoundationConfig, WallLayersConfig, StructuralConfig, UIState, Floor, Wall, InternalWall, SubObject, TopCoverConfig, SideCoverConfig } from './types';
+import { ProjectState, BuildingType, Dimensions, RoofConfig, FoundationConfig, WallLayersConfig, StructuralConfig, UIState, Floor, Wall, InternalWall, SubObject, TopCoverConfig, SideCoverConfig, RoofCoversConfig } from './types';
 
 
 // Helper to create default walls based on dimensions
@@ -131,6 +131,7 @@ interface ProjectStore extends ProjectState {
   setStructuralConfig: (config: Partial<StructuralConfig>) => void;
   setTopCoverConfig: (config: Partial<TopCoverConfig>) => void;
   setWallCoversConfig: (side: 'external' | 'internal', config: Partial<SideCoverConfig>) => void;
+  setRoofCoversConfig: (config: Partial<RoofCoversConfig>) => void;
   loadProject: (project: any) => void;
   resetProject: () => void;
 
@@ -191,6 +192,19 @@ const INITIAL_PROJECT_STATE = {
       length: 2.50,
       thickness: 0.012,
     },
+  },
+  roofCovers: {
+    soffitMaterial: 'decking' as const,
+    soffitThickness: 0.015,
+    soffitWidth: 0.12,
+    
+    fasciaMaterial: 'wood_board' as const,
+    fasciaThickness: 0.02,
+    fasciaHeight: 0.18,
+    
+    gableMaterial: 'wood_board' as const,
+    gableThickness: 0.02,
+    gableHeight: 0.18,
   },
   uiState: {
     selectedId: null,
@@ -386,6 +400,10 @@ export const useProjectStore = create<ProjectStore>()(
       ...state.wallCovers,
       [side]: { ...state.wallCovers[side], ...config }
     }
+  })),
+
+  setRoofCoversConfig: (config) => set((state) => ({
+    roofCovers: { ...state.roofCovers, ...config }
   })),
 
   updateUIState: (uiUpdates) => set((state) => ({

@@ -71,6 +71,7 @@ export default function FloatingViewControls() {
           {([
             { id: 'solid', label: 'Solid' },
             { id: 'seeThrough', label: 'See-thru' },
+            { id: 'sheathing', label: 'Sheathing' },
             { id: 'studsOnly', label: 'Studs Only' }
           ] as const).map((mode) => (
             <button

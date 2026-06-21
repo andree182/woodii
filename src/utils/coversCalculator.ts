@@ -43,6 +43,12 @@ export interface CoversBOM {
     roofShinglesCount: number;
     roofTilesCount: number;
     roofPlatesCount: number;
+    soffitMeters: number;
+    soffitPieces: number;
+    fasciaMeters: number;
+    fasciaPieces: number;
+    gableMeters: number;
+    gablePieces: number;
   };
 }
 
@@ -314,6 +320,55 @@ export function calculateCoversBOM(state: ProjectState): CoversBOM {
     });
   });
 
+  // C. Roof Trims & Bottom/Side Covers (Soffit, Fascia, Gable Wind Boards)
+  let soffitMeters = 0;
+  let soffitPieces = 0;
+  let fasciaMeters = 0;
+  let fasciaPieces = 0;
+  let gableMeters = 0;
+  let gablePieces = 0;
+
+  const roofCovers = state.roofCovers || {
+    soffitMaterial: 'decking',
+    soffitThickness: 0.015,
+    soffitWidth: 0.12,
+    fasciaMaterial: 'wood_board',
+    fasciaThickness: 0.02,
+    fasciaHeight: 0.18,
+    gableMaterial: 'wood_board',
+    gableThickness: 0.02,
+    gableHeight: 0.18,
+  };
+
+  const boardStandardLength = 4.0; // standard board length: 4m
+
+  // 1. Soffit (overhang bottom lining)
+  if (roofCovers.soffitMaterial !== 'none') {
+    // Eaves overhang soffit area (Z-axis left/right sides)
+    const eavesSoffitArea = 2 * state.roof.overhang * depth;
+    // Gable ends overhang soffit area (4 sloped sides)
+    const gableSoffitArea = 4 * state.roof.overhang * slopeLength;
+    const totalSoffitArea = eavesSoffitArea + gableSoffitArea;
+    const boardWidth = roofCovers.soffitWidth || 0.12;
+    
+    soffitMeters = totalSoffitArea / boardWidth;
+    soffitPieces = Math.ceil(soffitMeters / boardStandardLength);
+  }
+
+  // 2. Fascia (horizontal eaves board)
+  if (roofCovers.fasciaMaterial !== 'none') {
+    // 2 eave sides along the depth of the building + overhangs
+    fasciaMeters = 2 * (depth + state.roof.overhang * 2);
+    fasciaPieces = Math.ceil(fasciaMeters / boardStandardLength);
+  }
+
+  // 3. Gable Board (slanted wind board on gable ends)
+  if (roofCovers.gableMaterial !== 'none') {
+    // 4 slanted pitch lines
+    gableMeters = 4 * slopeLength;
+    gablePieces = Math.ceil(gableMeters / boardStandardLength);
+  }
+
   return {
     roof: roofEstimation,
     walls: wallEstimations,
@@ -328,7 +383,13 @@ export function calculateCoversBOM(state: ProjectState): CoversBOM {
       roofSheetingSheets: sheetingSheets,
       roofShinglesCount: state.topCover.material === 'shingles' ? topCoverPieces : 0,
       roofTilesCount: state.topCover.material === 'tiles' ? topCoverPieces : 0,
-      roofPlatesCount: state.topCover.material === 'plates' ? topCoverPieces : 0
+      roofPlatesCount: state.topCover.material === 'plates' ? topCoverPieces : 0,
+      soffitMeters,
+      soffitPieces,
+      fasciaMeters,
+      fasciaPieces,
+      gableMeters,
+      gablePieces
     }
   };
 }
