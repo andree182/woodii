@@ -639,7 +639,6 @@ export default function Sidebar() {
       {/* Header */}
       <div style={{ padding: '20px', borderBottom: '1px solid #333' }}>
         <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600, color: '#f0f0f0' }}>Woodii 3D Builder</h2>
-        <span style={{ fontSize: '12px', color: '#888' }}>Phase 1 & 2 - Setup & Core State</span>
       </div>
 
       {/* Tabs */}
