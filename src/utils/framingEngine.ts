@@ -316,13 +316,22 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         const avgY = (y1 + y2) / 2;
         const slopeAngle = Math.atan2(y2 - y1, segLen);
         
+        let plate1Len = segLen;
+        let plate2Len = segLen;
+
+        if (wall.id === 'wall-front' || wall.id === 'wall-back') {
+          plate2Len = segLen - 2 * wall.thickness;
+        } else if (wall.id === 'wall-left' || wall.id === 'wall-right') {
+          plate2Len = segLen + 2 * wall.thickness;
+        }
+
         // Double top plates
         members.push({
           id: `wall-top-plate-1-${floor.id}-${wall.id}-${x1.toFixed(2)}`,
           type: 'plate',
           position: toWorld((x1 + x2) / 2, avgY - lumberThickness / 2, wallLz),
           rotation: [0, rotationY, slopeAngle],
-          size: [segLen, lumberThickness, middle],
+          size: [plate1Len, lumberThickness, middle],
           floorId: floor.id,
           wallId: wall.id,
         });
@@ -331,7 +340,7 @@ export function generateFraming(state: ProjectState): FramingMember[] {
           type: 'plate',
           position: toWorld((x1 + x2) / 2, avgY - lumberThickness * 1.5, wallLz),
           rotation: [0, rotationY, slopeAngle],
-          size: [segLen, lumberThickness, middle],
+          size: [plate2Len, lumberThickness, middle],
           floorId: floor.id,
           wallId: wall.id,
         });
@@ -628,9 +637,12 @@ export function generateFraming(state: ProjectState): FramingMember[] {
           });
         }
       }
+    });
+
+    const wallYOffset = floor.level * heightPerFloor;
       
-      // Internal Walls loop
-      (floor.internalWalls || []).forEach((wall) => {
+    // Internal Walls loop
+    (floor.internalWalls || []).forEach((wall) => {
         const startX = wall.start[0];
         const startZ = wall.start[1];
         const endX = wall.end[0];
@@ -971,7 +983,6 @@ export function generateFraming(state: ProjectState): FramingMember[] {
         }
       });
     });
-  });
 
   // ----------------------------------------------------
   // 3. ROOF FRAMING GENERATION
