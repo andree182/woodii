@@ -173,6 +173,7 @@ const INITIAL_PROJECT_STATE = {
     isDragging: false,
     draggedId: null,
     draggedType: null,
+    showHelpModal: false,
   }
 };
 

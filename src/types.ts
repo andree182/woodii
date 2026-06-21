@@ -75,6 +75,7 @@ export interface UIState {
   draggedType: 'subObject' | 'wallHandle' | 'internalWall' | 'internalWallStart' | 'internalWallEnd' | 'internalWallRotate' | null;
   dragOffset?: [number, number, number?] | null;
   viewMode?: '3D' | 'topDown' | 'walking';
+  showHelpModal?: boolean;
 }
 
 export interface FoundationConfig {

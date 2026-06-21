@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import ThreeCanvas from './components/ThreeCanvas';
 import Sidebar from './components/Sidebar';
 import FloatingViewControls from './components/FloatingViewControls';
+import HelpModal from './components/HelpModal';
 import { useProjectStore } from './store';
 
 function App() {
@@ -63,6 +64,9 @@ function App() {
       
       {/* Controls sidebar */}
       <Sidebar />
+
+      {/* Interactive Guide Overlay */}
+      <HelpModal />
     </div>
   );
 }

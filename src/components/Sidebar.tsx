@@ -40,6 +40,7 @@ export default function Sidebar() {
     setFloorOpening,
     loadProject,
     resetProject,
+    updateUIState,
   } = useProjectStore();
 
   const handleSaveProject = () => {
@@ -749,6 +750,41 @@ export default function Sidebar() {
                 />
               </label>
             </div>
+          </section>
+
+          {/* Help & Guide */}
+          <section style={{ backgroundColor: '#1e1e1e', padding: '16px', borderRadius: '8px', border: '1px solid #333' }}>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', color: '#ff8c00', letterSpacing: '0.05em' }}>
+              Instructions & Guide
+            </h3>
+            <p style={{ fontSize: '11px', color: '#888', margin: '0 0 12px 0', lineHeight: '1.4' }}>
+              New to Woodii? View the interactive user guide to learn how to control the camera, drag elements, set presets, and export your plans.
+            </p>
+            <button
+              onClick={() => updateUIState({ showHelpModal: true })}
+              style={{
+                width: '100%',
+                padding: '10px',
+                backgroundColor: '#111',
+                color: '#ff8c00',
+                fontWeight: 600,
+                border: '1px solid #ff8c00',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                transition: 'background-color 0.2s, color 0.2s'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = '#ff8c00';
+                e.currentTarget.style.color = '#000';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = '#111';
+                e.currentTarget.style.color = '#ff8c00';
+              }}
+            >
+              📖 Open User Guide
+            </button>
           </section>
         </div>
       )}
